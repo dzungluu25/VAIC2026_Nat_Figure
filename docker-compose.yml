@@ -1,6 +1,43 @@
 version: '3.8'
 
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: vaic_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    networks:
+      - vaic-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  neo4j:
+    image: neo4j:5-community
+    container_name: vaic_neo4j
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      - NEO4J_AUTH=neo4j/vaic_neo_pass
+      - NEO4J_dbms_memory_heap_initial__size=256m
+      - NEO4J_dbms_memory_heap_max__size=512m
+      - NEO4J_dbms_memory_pagecache_size=256m
+    volumes:
+      - neo4jdata:/data
+    networks:
+      - vaic-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
   backend:
     build:
       context: ./backend
@@ -13,6 +50,11 @@ services:
       - .env
     environment:
       - NODE_ENV=development
+    depends_on:
+      redis:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
     networks:
       - vaic-network
 
@@ -36,3 +78,7 @@ services:
 networks:
   vaic-network:
     driver: bridge
+
+volumes:
+  redisdata:
+  neo4jdata:

@@ -1,0 +1,10 @@
+.canvas {
+  height: 420px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-surface-alt);
+}
+
+.canvas :global(.react-flow__attribution) {
+  display: none;
+}

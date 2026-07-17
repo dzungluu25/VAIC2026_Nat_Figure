@@ -1,0 +1,53 @@
+.node {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1.5px solid var(--color-border);
+  background: var(--color-surface);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  box-shadow: var(--shadow-sm);
+}
+
+.handle {
+  opacity: 0;
+}
+
+.label {
+  pointer-events: none;
+}
+
+.inactive {
+  opacity: 0.4;
+  border-style: dashed;
+}
+
+.pending {
+  color: var(--color-text-faint);
+}
+
+.in_progress {
+  border-color: var(--color-info);
+  color: var(--color-info);
+  background: var(--color-info-soft);
+}
+
+.done {
+  border-color: var(--color-success);
+  color: var(--color-success);
+  background: var(--color-success-soft);
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

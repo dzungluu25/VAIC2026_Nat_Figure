@@ -1,4 +1,4 @@
-import { AgentRole } from "./agent.types";
+import { AgentRole, AgentStatus } from "./agent.types";
 
 export interface ToolCallTrace {
   toolName: string;
@@ -12,9 +12,30 @@ export interface AgentTrace {
   runId: string;
   agent: AgentRole;
   task: string;
-  status: "pending" | "running" | "completed" | "blocked" | "failed";
+  status: AgentStatus;
   summary: string;
   toolCalls: ToolCallTrace[];
   startedAt: string;
   completedAt?: string;
+  findings?: any[]; // Holds decision envelopes if any
+}
+
+export interface AuditEvent {
+  eventId: string;
+  runId: string;
+  timestamp: string;
+  actor: string; // e.g. "legal-agent", "ops-agent", "planner-agent", "human-admin"
+  actionType: "agent_call" | "tool_call" | "model_call" | "dashboard_output" | "human_approval";
+  status: "allowed" | "blocked";
+  details: string;
+}
+
+export interface CostBudgetStatus {
+  piiMasked: boolean;
+  missingConsentCalls: number;
+  highWritesBeforeApproval: number;
+  modelCallsUsed: number;
+  maxModelCalls: number;
+  estimatedCostUSD: number;
+  replayMode: boolean;
 }
