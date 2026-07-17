@@ -3,6 +3,7 @@ import { ConditionPrecedent } from "../../types/agent.types";
 import { loadRetailCase } from "../data/retail-case-loader";
 import { verifyAccessToken } from "../../config/auth";
 import { recordAuditEvent } from "../governance/audit-log.service";
+import { ApprovedLoanTerms, ApprovalMode } from "../../types/product.types";
 
 /**
  * Verifies the approval token is a genuine, unexpired JWT signed for a CREDIT_APPROVER —
@@ -29,7 +30,9 @@ export const runOperationsAgent = async (
   caseId: string,
   finalDecision: "FAST_PASS" | "PASS" | "CONDITIONAL_PASS" | "REJECTED" | "HUMAN_ESCALATION",
   conditions: ConditionPrecedent[],
-  approvalToken?: string
+  approvalToken?: string,
+  approvalMode: ApprovalMode = "HYBRID_APPROVAL",
+  approvedTerms?: ApprovedLoanTerms
 ): Promise<{ trace: AgentTrace; ticketId?: string }> => {
   const startedAt = new Date().toISOString();
 
@@ -67,13 +70,13 @@ export const runOperationsAgent = async (
       output: { notificationSent: true, channel: "email" },
       status: "success"
     });
-  } else if (finalDecision === "FAST_PASS" || finalDecision === "PASS") {
+  } else if (finalDecision === "FAST_PASS" && approvalMode === "AUTO_APPROVAL" && approvedTerms) {
     ticketId = `SHB-FACILITY-OK-${Math.floor(100000 + Math.random() * 900000)}`;
-    summary = `Phê duyệt thành công. Khởi tạo khế ước vay thành công trên hệ thống Core Banking (Facility ID: ${ticketId}). Đã gửi SMS/Email chúc mừng khách hàng.`;
+    summary = `Auto-policy đã cấp quyền trong đúng hạn mức. Khởi tạo khế ước vay ${approvedTerms.loanAmount.toLocaleString()} VND trên Core Banking (Facility ID: ${ticketId}).`;
 
     toolCalls.push({
       toolName: "registerCoreBankingFacility",
-      input: { customerId: retailCase.customerId, loanAmount: retailCase.requestedLoan.amount, status: "ACTIVE" },
+      input: { customerId: retailCase.customerId, loanAmount: approvedTerms.loanAmount, tenureYears: approvedTerms.tenureYears, approvalMode, status: "ACTIVE" },
       output: { facilityId: ticketId, registrationStatus: "SUCCESS" },
       status: "success"
     });
@@ -84,14 +87,14 @@ export const runOperationsAgent = async (
       output: { smsSent: true, emailSent: true },
       status: "success"
     });
-  } else if (finalDecision === "CONDITIONAL_PASS") {
+  } else if (finalDecision === "CONDITIONAL_PASS" || finalDecision === "PASS") {
     // Check Human-in-the-Loop Token Gate: the approval token must be a genuine JWT
     // signed for a CREDIT_APPROVER identity, not a shared static secret.
     const { approved: hasValidToken, approverActor } = verifyApprovalToken(approvalToken);
 
     if (!hasValidToken) {
       status = "pending";
-      summary = `Hồ sơ đạt trạng thái Phê duyệt có điều kiện. Đang CHỜ CON NGƯỜI (Human-in-the-Loop) ký duyệt bằng chữ ký số HSM để đẩy khế ước lên Core Banking.`;
+      summary = `Hồ sơ thuộc luồng HYBRID_APPROVAL. Đang chờ người có thẩm quyền duyệt đề xuất trước mọi thao tác ghi Core Banking.`;
 
       toolCalls.push({
         toolName: "assertHumanApprovalTokenGate",
@@ -100,9 +103,10 @@ export const runOperationsAgent = async (
         status: "success"
       });
     } else {
-      ticketId = `SHB-FACILITY-COND-${Math.floor(100000 + Math.random() * 900000)}`;
+      ticketId = `SHB-FACILITY-${finalDecision === "PASS" ? "OK" : "COND"}-${Math.floor(100000 + Math.random() * 900000)}`;
       status = "completed";
-      summary = `Người duyệt ${approverActor} đã ký duyệt (Token approved). Đã tạo khế ước vay có điều kiện trên Core Banking (Facility ID: ${ticketId}) ở trạng thái PENDING_CONDITIONS. Vui lòng hoàn tất điều kiện trước giải ngân.`;
+      const facilityStatus = finalDecision === "PASS" ? "ACTIVE" : "PENDING_CONDITIONS";
+      summary = `Người duyệt ${approverActor} đã ký duyệt. Đã tạo khế ước ${approvedTerms?.loanAmount.toLocaleString() ?? "—"} VND trên Core Banking (${ticketId}) ở trạng thái ${facilityStatus}.`;
 
       toolCalls.push({
         toolName: "assertHumanApprovalTokenGate",
@@ -124,8 +128,9 @@ export const runOperationsAgent = async (
         toolName: "registerCoreBankingFacility",
         input: { 
           customerId: retailCase.customerId, 
-          loanAmount: retailCase.requestedLoan.amount, 
-          status: "PENDING_CONDITIONS", 
+          loanAmount: approvedTerms?.loanAmount,
+          tenureYears: approvedTerms?.tenureYears,
+          status: finalDecision === "PASS" ? "ACTIVE" : "PENDING_CONDITIONS",
           conditionsCount: conditions.length 
         },
         output: { facilityId: ticketId, registrationStatus: "SUCCESS" },

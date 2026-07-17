@@ -89,8 +89,9 @@ export const runProductPolicyAgent = async (
       ruleIds: ["PRODUCT_REPRICE_CLEAN"],
       citations: ["Chính sách định giá SHB - Phiên bản điều chỉnh tuân thủ"]
     });
-  } else {
-    // Initial pricing offer (TRAP): 7.5% if insurance is accepted, 8.3% if declined.
+  } else if (caseId === "case-complex-main") {
+    // Legacy campaign conflict kept in the complex demo case so the compliance
+    // self-correction loop can detect and remove insurance-linked pricing.
     if (retailCase.insurancePreference === "accepted") {
       appliedRate = homeLoanProduct.preferentialRate; // 7.5%
       insuranceTyingApplied = true;
@@ -111,6 +112,22 @@ export const runProductPolicyAgent = async (
       evidence: { appliedRate, insuranceTyingApplied, preference: retailCase.insurancePreference },
       ruleIds: ["PRODUCT_PRICING_INSURANCE_TYING"],
       citations: ["Chính sách bán chéo sản phẩm SHB - Hướng dẫn 2026"]
+    });
+  } else {
+    // Normal offers never use optional insurance as a pricing or eligibility input.
+    appliedRate = homeLoanProduct.baseRate;
+    insuranceTyingApplied = false;
+    note = "Bảo hiểm là sản phẩm tuỳ chọn và không ảnh hưởng tới lãi suất hoặc quyết định tín dụng.";
+    findings.push({
+      decisionId: `dec-product-clean-${Date.now()}`,
+      agent: "product",
+      status: "PASS",
+      severity: "INFO",
+      blocksAt: "NONE",
+      finding: "Định giá độc lập với quyết định mua bảo hiểm.",
+      evidence: { appliedRate, insuranceTyingApplied },
+      ruleIds: ["PRODUCT_PRICING_INSURANCE_INDEPENDENT"],
+      citations: ["Product pricing guardrail v2"]
     });
   }
 

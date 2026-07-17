@@ -4,6 +4,7 @@ import { LandingPage } from "./pages/LandingPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { AgentsPage } from "./pages/AgentsPage";
 import { MetricsPage } from "./pages/MetricsPage";
+import { RolesPage } from "./pages/RolesPage";
 
 export const App = () => (
   <BrowserRouter>
@@ -12,6 +13,7 @@ export const App = () => (
       <Route element={<AppShell />}>
         <Route path="workspace" element={<DashboardPage />} />
         <Route path="agents" element={<AgentsPage />} />
+        <Route path="roles" element={<RolesPage />} />
         <Route path="metrics" element={<MetricsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,5 +1,6 @@
 import { AgentTrace, AuditEvent, CostBudgetStatus } from "./trace.types";
 import { ConditionPrecedent } from "./agent.types";
+import { ApprovedLoanTerms, ApprovalMode, BusinessValueProjection } from "./product.types";
 
 export interface OrchestrationRequest {
   prompt: string;
@@ -15,6 +16,9 @@ export interface OrchestrationResponse {
   conditions?: ConditionPrecedent[];
   budgetStatus?: CostBudgetStatus;
   auditEvents?: AuditEvent[];
+  approvalMode?: ApprovalMode;
+  approvedTerms?: ApprovedLoanTerms;
+  businessValue?: BusinessValueProjection;
 }
 
 /**

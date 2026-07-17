@@ -101,14 +101,16 @@ const buildOrchestrationResponse = async (
 
   const rawTraces = assembleTraces(finalState);
   const maskedTraces = maskPiiPayload(rawTraces);
-  const { finalDecision, conditions, requiredFixes, ticketId } = finalState;
+  const { finalDecision, conditions, requiredFixes, ticketId, approvalMode, approvedTerms, businessValue } = finalState;
 
   // Compile final answer string
   let finalAnswer = "";
   if (finalDecision === "FAST_PASS") {
     finalAnswer = `[DUYỆT NHANH] Khoản vay của khách hàng được phê duyệt qua luồng Fast Pass. Số tiền vay đề xuất: ${retailCase.requestedLoan.amount.toLocaleString()} VND. Mã hồ sơ giải ngân Core Banking: ${ticketId || "PENDING"}.`;
   } else if (finalDecision === "PASS") {
-    finalAnswer = `[PHÊ DUYỆT] Hồ sơ của khách hàng đạt mọi chỉ tiêu tài chính và pháp lý. Đã khởi tạo hồ sơ vay thành công. Số tiền vay: ${retailCase.requestedLoan.amount.toLocaleString()} VND. Mã hồ sơ Core Banking: ${ticketId}.`;
+    finalAnswer = ticketId
+      ? `[ĐÃ PHÊ DUYỆT] Hạn mức ${approvedTerms?.loanAmount.toLocaleString()} VND đã được người có thẩm quyền duyệt. Mã Core Banking: ${ticketId}.`
+      : `[ĐỀ XUẤT PHÊ DUYỆT] Hồ sơ đạt tiêu chí tín dụng và pháp lý, đang chờ người có thẩm quyền phê duyệt trước khi ghi Core Banking.`;
   } else if (finalDecision === "CONDITIONAL_PASS") {
     const creditOutput = rawTraces.find(t => t.agent === "credit")?.toolCalls.find(tc => tc.toolName === "evaluateCreditRules")?.output as any;
     const loanAmt = creditOutput?.restructureScenario?.loanAmount || retailCase.requestedLoan.amount;
@@ -146,7 +148,10 @@ const buildOrchestrationResponse = async (
     approvalTicketId: ticketId,
     conditions,
     budgetStatus,
-    auditEvents: await getAuditEventsByRun(runId)
+    auditEvents: await getAuditEventsByRun(runId),
+    approvalMode,
+    approvedTerms,
+    businessValue
   };
 
   saveOrchestrationRun(runId, response);

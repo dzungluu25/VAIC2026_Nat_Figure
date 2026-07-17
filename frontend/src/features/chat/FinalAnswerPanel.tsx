@@ -1,4 +1,4 @@
-import { CheckCircle2, CircleDashed, TicketCheck } from "lucide-react";
+import { CheckCircle2, CircleDashed, Clock3, Landmark, TrendingUp, TicketCheck } from "lucide-react";
 import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
 import { Skeleton } from "../../components/Skeleton";
@@ -44,6 +44,14 @@ export const FinalAnswerPanel = () => {
   return (
     <Card title="Kết luận thẩm định" action={<Badge tone="brand">Run {response.runId.replace("run-", "#")}</Badge>}>
       <p className={styles.answer}>{response.finalAnswer}</p>
+
+      {(response.approvedTerms || response.businessValue) && (
+        <div className={styles.decisionMetrics}>
+          <div><Landmark size={16} /><span><small>Đề xuất</small><strong>{response.approvedTerms ? `${response.approvedTerms.loanAmount.toLocaleString("vi-VN")} ₫ · ${response.approvedTerms.tenureYears} năm` : "—"}</strong></span></div>
+          <div><TrendingUp size={16} /><span><small>RAROC dự kiến</small><strong>{response.businessValue ? `${response.businessValue.rarocPercent}%` : "—"}</strong></span></div>
+          <div><Clock3 size={16} /><span><small>Thời gian tiết kiệm</small><strong>{response.businessValue ? `${response.businessValue.estimatedManualMinutesSaved} phút` : "—"}</strong></span></div>
+        </div>
+      )}
 
       {response.approvalTicketId && (
         <div className={styles.ticket}>

@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vaic-credit-risk"
+version = "0.1.0"
+description = "Governed PyTorch PD/LGD estimation and constrained credit-limit recommendation service"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "numpy>=2,<3",
+  "pandas>=2.2,<4",
+  "pydantic>=2.10,<3",
+  "scikit-learn>=1.5,<2",
+  "torch>=2.5,<3",
+  "uvicorn>=0.34,<1",
+]
+
+[project.optional-dependencies]
+dev = ["httpx>=0.28,<1", "pytest>=8,<10"]
+
+[tool.setuptools.packages.find]
+include = ["credit_risk*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+

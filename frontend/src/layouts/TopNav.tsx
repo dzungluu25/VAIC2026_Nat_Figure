@@ -1,10 +1,11 @@
-import { Activity, ArrowUpRight, BrainCircuit, ChartNoAxesCombined, House, Sparkles } from "lucide-react";
+import { Activity, ArrowUpRight, BrainCircuit, ChartNoAxesCombined, House, Sparkles, UsersRound } from "lucide-react";
 import { Link, NavLink } from "react-router-dom";
 import styles from "./TopNav.module.css";
 
 const NAV_ITEMS = [
   { to: "/workspace", label: "Thẩm định", icon: Sparkles },
   { to: "/agents", label: "Agent flow", icon: BrainCircuit },
+  { to: "/roles", label: "Vai trò", icon: UsersRound },
   { to: "/metrics", label: "Hiệu năng", icon: ChartNoAxesCombined },
 ];
 

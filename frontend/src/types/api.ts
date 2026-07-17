@@ -85,6 +85,20 @@ export interface OrchestrationResponse {
   conditions?: ConditionPrecedent[];
   budgetStatus?: CostBudgetStatus;
   auditEvents?: AuditEvent[];
+  approvalMode?: "AUTO_APPROVAL" | "HYBRID_APPROVAL";
+  approvedTerms?: {
+    loanAmount: number;
+    tenureYears: number;
+    annualRate: number;
+    source: "ORIGINAL_REQUEST" | "RESTRUCTURED_PROPOSAL";
+  };
+  businessValue?: {
+    riskAdjustedProfit: number;
+    rarocPercent: number;
+    estimatedManualMinutesSaved: number;
+    estimatedProcessingCostSavedVnd: number;
+    profitable: boolean;
+  };
 }
 
 export type RiskTier = "FAST" | "COMPLEX";
