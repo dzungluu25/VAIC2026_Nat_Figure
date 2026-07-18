@@ -188,7 +188,15 @@ export type OrchestrationStreamEvent =
   export interface TenantRuntimeConfig {
     tenantId: string;
     version: string;
-    thresholds: { minCreditScore: number; maxDti: number };
+    thresholds: {
+      minCreditScore: number;
+      maxDti: number;
+      maxLtvByPropertyType: { apartment: number; house: number; land: number };
+      minimumMonthlyLivingExpenseVnd: number;
+      incomeHaircuts: { salary: number; freelance: number; rental: number };
+      maximumRepaymentAgeMargin: number;
+      fraud: { incomeDebtRatioCeiling: number; collateralValueToLoanCeiling: number };
+    };
     runtime: { maxRetriesPerAgent: number; maxSteps: number; maxTokens: number; timeoutSeconds: number };
     allowedModels: string[];
     citationPolicy: CitationPolicy;

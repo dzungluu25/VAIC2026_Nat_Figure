@@ -19,10 +19,21 @@ const formatDate = (iso: string): string => new Date(iso).toLocaleString("vi-VN"
 /** Trần DTI theo Thông tư 22/2019/TT-NHNN — ngân hàng chỉ được siết chặt hơn (đặt thấp hơn), không được vượt. */
 const REGULATORY_MAX_DTI = 0.6;
 
+/** Trần LTV theo Thông tư 22/2019/TT-NHNN (hệ số rủi ro tăng vọt trên các mốc này) — ngân hàng chỉ được siết chặt hơn. */
+const REGULATORY_MAX_LTV_BY_PROPERTY_TYPE = { apartment: 90, house: 90, land: 90 };
+
 const buildBlankDraft = (tenantId: string): TenantRuntimeConfig => ({
   tenantId,
   version: "1.0.0",
-  thresholds: { minCreditScore: 600, maxDti: 0.5 },
+  thresholds: {
+    minCreditScore: 600,
+    maxDti: 0.5,
+    maxLtvByPropertyType: { apartment: 80, house: 70, land: 50 },
+    minimumMonthlyLivingExpenseVnd: 5000000,
+    incomeHaircuts: { salary: 1, freelance: 0.5, rental: 0.7 },
+    maximumRepaymentAgeMargin: 0,
+    fraud: { incomeDebtRatioCeiling: 15, collateralValueToLoanCeiling: 6 },
+  },
   runtime: { maxRetriesPerAgent: 3, maxSteps: 20, maxTokens: 4000, timeoutSeconds: 60 },
   allowedModels: [],
   citationPolicy: { required: true, rejectIfMissing: true, minimumConfidence: 0.7, allowedSourceTypes: [] },
@@ -30,7 +41,13 @@ const buildBlankDraft = (tenantId: string): TenantRuntimeConfig => ({
   updatedBy: "",
 });
 
-type FieldErrors = Partial<Record<"maxDti" | "maxRetriesPerAgent" | "maxSteps" | "maxTokens" | "timeoutSeconds" | "allowedModels" | "version" | "effectiveFrom", string>>;
+type FieldErrors = Partial<Record<
+  | "maxDti" | "maxRetriesPerAgent" | "maxSteps" | "maxTokens" | "timeoutSeconds" | "allowedModels" | "version" | "effectiveFrom"
+  | "maxLtvApartment" | "maxLtvHouse" | "maxLtvLand" | "minimumMonthlyLivingExpenseVnd"
+  | "haircutSalary" | "haircutFreelance" | "haircutRental" | "maximumRepaymentAgeMargin"
+  | "incomeDebtRatioCeiling" | "collateralValueToLoanCeiling",
+  string
+>>;
 
 const validate = (draft: TenantRuntimeConfig): FieldErrors => {
   const errors: FieldErrors = {};
@@ -44,6 +61,23 @@ const validate = (draft: TenantRuntimeConfig): FieldErrors => {
   if (draft.allowedModels.length === 0) errors.allowedModels = "Cần ít nhất 1 mô hình được phép sử dụng";
   if (!draft.version.trim()) errors.version = "Không được để trống";
   if (!draft.effectiveFrom.trim() || Number.isNaN(new Date(draft.effectiveFrom).getTime())) errors.effectiveFrom = "Ngày hiệu lực không hợp lệ";
+
+  const { maxLtvByPropertyType, minimumMonthlyLivingExpenseVnd, incomeHaircuts, maximumRepaymentAgeMargin, fraud } = draft.thresholds;
+  (["apartment", "house", "land"] as const).forEach(type => {
+    const key = (`maxLtv${type[0].toUpperCase()}${type.slice(1)}`) as "maxLtvApartment" | "maxLtvHouse" | "maxLtvLand";
+    const value = maxLtvByPropertyType[type];
+    if (!(value > 0 && value <= 100)) errors[key] = "Phải nằm trong khoảng (0, 100]";
+    else if (value > REGULATORY_MAX_LTV_BY_PROPERTY_TYPE[type])
+      errors[key] = `Không được vượt trần ${REGULATORY_MAX_LTV_BY_PROPERTY_TYPE[type]}% theo Thông tư 22/2019/TT-NHNN`;
+  });
+  if (minimumMonthlyLivingExpenseVnd < 0) errors.minimumMonthlyLivingExpenseVnd = "Không được âm";
+  if (!(incomeHaircuts.salary >= 0 && incomeHaircuts.salary <= 1)) errors.haircutSalary = "Phải nằm trong khoảng [0, 1]";
+  if (!(incomeHaircuts.freelance >= 0 && incomeHaircuts.freelance <= 1)) errors.haircutFreelance = "Phải nằm trong khoảng [0, 1]";
+  if (!(incomeHaircuts.rental >= 0 && incomeHaircuts.rental <= 1)) errors.haircutRental = "Phải nằm trong khoảng [0, 1]";
+  if (maximumRepaymentAgeMargin < 0) errors.maximumRepaymentAgeMargin = "Không được âm";
+  if (fraud.incomeDebtRatioCeiling <= 0) errors.incomeDebtRatioCeiling = "Phải lớn hơn 0";
+  if (fraud.collateralValueToLoanCeiling <= 0) errors.collateralValueToLoanCeiling = "Phải lớn hơn 0";
+
   return errors;
 };
 
@@ -163,6 +197,141 @@ export const PolicyConsolePage = () => {
               max="1"
               value={form.thresholds.maxDti}
               onChange={e => updateForm(d => ({ ...d, thresholds: { ...d.thresholds, maxDti: Number(e.target.value) } }))}
+            />
+          </div>
+        </Card>
+
+        <Card title="Tài sản đảm bảo — LTV tối đa theo loại tài sản">
+          <div className={styles.fieldStack}>
+            <PolicyField
+              label="Căn hộ chung cư (%)"
+              hint={`Tối đa ${REGULATORY_MAX_LTV_BY_PROPERTY_TYPE.apartment}% theo trần quy định NHNN`}
+              error={errors.maxLtvApartment}
+              type="number"
+              min="0"
+              max="100"
+              value={form.thresholds.maxLtvByPropertyType.apartment}
+              onChange={e =>
+                updateForm(d => ({ ...d, thresholds: { ...d.thresholds, maxLtvByPropertyType: { ...d.thresholds.maxLtvByPropertyType, apartment: Number(e.target.value) } } }))
+              }
+            />
+            <PolicyField
+              label="Nhà đất (%)"
+              hint={`Tối đa ${REGULATORY_MAX_LTV_BY_PROPERTY_TYPE.house}% theo trần quy định NHNN`}
+              error={errors.maxLtvHouse}
+              type="number"
+              min="0"
+              max="100"
+              value={form.thresholds.maxLtvByPropertyType.house}
+              onChange={e =>
+                updateForm(d => ({ ...d, thresholds: { ...d.thresholds, maxLtvByPropertyType: { ...d.thresholds.maxLtvByPropertyType, house: Number(e.target.value) } } }))
+              }
+            />
+            <PolicyField
+              label="Đất nền (%)"
+              hint={`Tối đa ${REGULATORY_MAX_LTV_BY_PROPERTY_TYPE.land}% theo trần quy định NHNN — nên siết chặt để hạn chế đầu cơ`}
+              error={errors.maxLtvLand}
+              type="number"
+              min="0"
+              max="100"
+              value={form.thresholds.maxLtvByPropertyType.land}
+              onChange={e =>
+                updateForm(d => ({ ...d, thresholds: { ...d.thresholds, maxLtvByPropertyType: { ...d.thresholds.maxLtvByPropertyType, land: Number(e.target.value) } } }))
+              }
+            />
+          </div>
+        </Card>
+
+        <Card title="Năng lực trả nợ — Chiết khấu thu nhập & chi phí sinh hoạt">
+          <div className={styles.fieldStack}>
+            <PolicyField
+              label="Hệ số ghi nhận lương chuyển khoản"
+              hint="1 = ghi nhận 100% (không chiết khấu)"
+              error={errors.haircutSalary}
+              type="number"
+              step="0.01"
+              min="0"
+              max="1"
+              value={form.thresholds.incomeHaircuts.salary}
+              onChange={e =>
+                updateForm(d => ({ ...d, thresholds: { ...d.thresholds, incomeHaircuts: { ...d.thresholds.incomeHaircuts, salary: Number(e.target.value) } } }))
+              }
+            />
+            <PolicyField
+              label="Hệ số ghi nhận thu nhập tự do/freelance"
+              error={errors.haircutFreelance}
+              type="number"
+              step="0.01"
+              min="0"
+              max="1"
+              value={form.thresholds.incomeHaircuts.freelance}
+              onChange={e =>
+                updateForm(d => ({ ...d, thresholds: { ...d.thresholds, incomeHaircuts: { ...d.thresholds.incomeHaircuts, freelance: Number(e.target.value) } } }))
+              }
+            />
+            <PolicyField
+              label="Hệ số ghi nhận thu nhập cho thuê"
+              error={errors.haircutRental}
+              type="number"
+              step="0.01"
+              min="0"
+              max="1"
+              value={form.thresholds.incomeHaircuts.rental}
+              onChange={e =>
+                updateForm(d => ({ ...d, thresholds: { ...d.thresholds, incomeHaircuts: { ...d.thresholds.incomeHaircuts, rental: Number(e.target.value) } } }))
+              }
+            />
+            <PolicyField
+              label="Chi phí sinh hoạt tối thiểu (VND/tháng)"
+              hint="Trừ khỏi thu nhập hợp lệ trước khi tính DTI"
+              error={errors.minimumMonthlyLivingExpenseVnd}
+              type="number"
+              min="0"
+              step="100000"
+              value={form.thresholds.minimumMonthlyLivingExpenseVnd}
+              onChange={e =>
+                updateForm(d => ({ ...d, thresholds: { ...d.thresholds, minimumMonthlyLivingExpenseVnd: Number(e.target.value) } }))
+              }
+            />
+          </div>
+        </Card>
+
+        <Card title="Kiểm soát gian lận & rủi ro dài hạn">
+          <div className={styles.fieldStack}>
+            <PolicyField
+              label="Trần tổng dư nợ / thu nhập hợp lệ (lần)"
+              hint="Fraud Agent cảnh báo nếu vượt ngưỡng này — dấu hiệu vay dùm/vay quá sức"
+              error={errors.incomeDebtRatioCeiling}
+              type="number"
+              min="0"
+              step="0.5"
+              value={form.thresholds.fraud.incomeDebtRatioCeiling}
+              onChange={e =>
+                updateForm(d => ({ ...d, thresholds: { ...d.thresholds, fraud: { ...d.thresholds.fraud, incomeDebtRatioCeiling: Number(e.target.value) } } }))
+              }
+            />
+            <PolicyField
+              label="Trần giá trị tài sản / khoản vay đề xuất (lần)"
+              hint="Cảnh báo định giá tài sản bất thường so với số tiền xin vay"
+              error={errors.collateralValueToLoanCeiling}
+              type="number"
+              min="0"
+              step="0.5"
+              value={form.thresholds.fraud.collateralValueToLoanCeiling}
+              onChange={e =>
+                updateForm(d => ({ ...d, thresholds: { ...d.thresholds, fraud: { ...d.thresholds.fraud, collateralValueToLoanCeiling: Number(e.target.value) } } }))
+              }
+            />
+            <PolicyField
+              label="Biên độ tuổi tất toán tối đa (năm)"
+              hint="Cộng thêm vào tuổi nghỉ hưu mặc định (65) để tính tuổi tối đa tại thời điểm tất toán"
+              error={errors.maximumRepaymentAgeMargin}
+              type="number"
+              min="0"
+              value={form.thresholds.maximumRepaymentAgeMargin}
+              onChange={e =>
+                updateForm(d => ({ ...d, thresholds: { ...d.thresholds, maximumRepaymentAgeMargin: Number(e.target.value) } }))
+              }
             />
           </div>
         </Card>
