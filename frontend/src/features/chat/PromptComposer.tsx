@@ -5,6 +5,7 @@ import { Button } from "../../components/Button";
 import { useAgentStream } from "../../hooks/useAgentStream";
 import { extractDraftCase } from "../../services/orchestrationService";
 import { getDemoAccessToken } from "../../services/authService";
+import type { RetailCaseInput } from "../../types/api";
 import styles from "./PromptComposer.module.css";
 
 type Income = { type: "salary" | "freelance" | "rental"; amount: string; evidence: string };
@@ -18,9 +19,21 @@ const initialProperty = (): Property => ({ type: "apartment", value: "", status:
 const positiveNumber = (value: string) => Number(value) > 0;
 const nonNegativeNumber = (value: string) => value !== "" && Number(value) >= 0;
 
+const hasDraftContent = (draft: unknown): boolean => {
+  if (!draft || typeof draft !== "object") return false;
+  return Object.values(draft as Record<string, unknown>).some(value => {
+    if (Array.isArray(value)) return value.length > 0;
+    if (value && typeof value === "object") {
+      return Object.values(value as Record<string, unknown>).some(
+        nested => nested !== undefined && nested !== null && nested !== ""
+      );
+    }
+    return value !== undefined && value !== null && value !== "";
+  });
+};
 
 export const PromptComposer = () => {
-  const { run, phase } = useAgentStream();
+  const { runStructuredCase, phase } = useAgentStream();
   const isRunning = phase === "running";
   const [activeTab, setActiveTab] = useState<"text" | "form">("text");
   
@@ -150,6 +163,10 @@ export const PromptComposer = () => {
     try {
       const token = await getDemoAccessToken();
       const draft = await extractDraftCase(rawText, token);
+      if (!hasDraftContent(draft)) {
+        setExtractionError("Chua trich xuat duoc thong tin tu mo ta nay. Hay bo sung ten, tuoi, thu nhap, khoan vay, tai san va chung tu xac minh roi thu lai.");
+        return;
+      }
       
       fillFormFromDraft(draft);
       
@@ -209,11 +226,11 @@ export const PromptComposer = () => {
       document.querySelector("[data-form-error='true']")?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
-    const payload = {
-      demographic: { name: form.name.trim(), age: Number(form.age), maritalStatus: form.maritalStatus, cccd: form.cccd.trim(), phone: form.phone.trim(), email: form.email.trim() },
+    const payload: RetailCaseInput = {
+      demographic: { name: form.name.trim(), age: Number(form.age), maritalStatus: form.maritalStatus as "single" | "married", cccd: form.cccd.trim(), phone: form.phone.trim(), email: form.email.trim() },
       incomeSources: incomes.map(item => ({ type: item.type, amount: Number(item.amount), evidence: item.evidence.trim() })),
       currentDebts: hasDebt ? debts.map(item => ({ type: item.type, monthlyOwed: Number(item.monthlyOwed), outstandingAmount: Number(item.outstandingAmount), ...(item.type === "credit_card" ? { limit: Number(item.limit) } : {}), evidence: item.evidence.trim() })) : [],
-      requestedLoan: { type: form.loanType, amount: Number(form.loanAmount), tenureYears: Number(form.tenureYears) },
+      requestedLoan: { type: form.loanType as "mortgage" | "refinance", amount: Number(form.loanAmount), tenureYears: Number(form.tenureYears) },
       ...(form.loanType === "refinance" ? { refinanceAutoLoan: { remainingPrincipal: Number(form.refinancePrincipal), monthlyPayment: Number(form.refinanceMonthlyPayment) } } : {}),
       property: { 
         type: properties[0].type, 
@@ -230,9 +247,9 @@ export const PromptComposer = () => {
         evidence: p.evidence.trim()
       })),
       consent: { credit_check: form.creditCheck, tax_income_check: form.taxIncomeCheck, social_insurance_check: form.socialInsuranceCheck, marketing: form.marketing },
-      insurancePreference: form.insurancePreference,
+      insurancePreference: form.insurancePreference as "accepted" | "declined",
     };
-    void run(JSON.stringify(payload));
+    void runStructuredCase(payload);
   };
 
   const error = (key: string) => errors[key] ? <span className={styles.error} data-form-error="true">{errors[key]}</span> : null;

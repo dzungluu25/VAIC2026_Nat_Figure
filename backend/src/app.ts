@@ -1,4 +1,5 @@
 import express from "express";
+import type { NextFunction, Request, Response } from "express";
 import cors from "cors";
 import authRoutes from "./routes/auth.routes";
 import orchestrationRoutes from "./routes/orchestration.routes";
@@ -10,6 +11,16 @@ const app = express();
 
 app.use(cors());
 app.use(express.json());
+
+app.use((error: unknown, _req: Request, res: Response, next: NextFunction) => {
+  if (error instanceof SyntaxError && "body" in error) {
+    return res.status(400).json({
+      error: "Dữ liệu JSON của request không hợp lệ. Vui lòng kiểm tra dấu phẩy, dấu ngoặc và chuỗi giá trị trước khi gửi lại.",
+      code: "INVALID_INPUT",
+    });
+  }
+  return next(error);
+});
 
 app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });

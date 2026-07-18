@@ -14,6 +14,8 @@ export const getFptMarketplaceClient = (): OpenAI => {
     client = new OpenAI({
       apiKey: config.fptMarketplaceApiKey,
       baseURL: config.fptMarketplaceBaseUrl,
+      timeout: config.llmRequestTimeoutMs,
+      maxRetries: config.llmMaxRetries,
     });
   }
   return client;

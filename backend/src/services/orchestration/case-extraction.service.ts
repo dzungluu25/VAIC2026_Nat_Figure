@@ -356,8 +356,8 @@ export const extractCaseFromPrompt = async (prompt: string): Promise<CaseExtract
         console.error("Structured case parsing/validation failed:", err);
         return {
           ok: false,
-          missingFields: ["dữ liệu hợp lệ"],
-          questions: [`Thông tin hồ sơ không hợp lệ: ${err?.message || String(err)}`],
+          missingFields: ["dữ liệu JSON hợp lệ"],
+          questions: ["Dữ liệu hồ sơ dạng JSON không hợp lệ. Vui lòng kiểm tra dấu phẩy, dấu ngoặc và chuỗi giá trị trước khi gửi lại."],
         };
       }
     }
@@ -492,6 +492,102 @@ const DRAFT_TOOLS: ChatCompletionTool[] = [
   },
 ];
 
+const normalizeVietnameseText = (value: string): string =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .toLowerCase();
+
+const parseVietnameseAmountVnd = (amount: string, unit: string | undefined): number | undefined => {
+  const numeric = Number(amount.replace(",", "."));
+  if (!Number.isFinite(numeric) || numeric <= 0) return undefined;
+  const normalizedUnit = normalizeVietnameseText(unit ?? "vnd");
+  if (["ty", "ti", "b"].includes(normalizedUnit)) return Math.round(numeric * 1_000_000_000);
+  if (["trieu", "m"].includes(normalizedUnit)) return Math.round(numeric * 1_000_000);
+  if (["nghin", "k"].includes(normalizedUnit)) return Math.round(numeric * 1_000);
+  return Math.round(numeric);
+};
+
+const hasDraftData = (draft: Record<string, unknown>): boolean =>
+  Object.values(draft).some(value => {
+    if (Array.isArray(value)) return value.length > 0;
+    if (value && typeof value === "object") {
+      return Object.values(value as Record<string, unknown>).some(
+        nested => nested !== undefined && nested !== null && nested !== ""
+      );
+    }
+    return value !== undefined && value !== null && value !== "";
+  });
+
+const extractLocalDraftCaseFromPrompt = (prompt: string): Record<string, unknown> => {
+  const normalized = normalizeVietnameseText(prompt);
+  const draft: Record<string, unknown> = {};
+  const demographic: Record<string, unknown> = {};
+  const requestedLoan: Record<string, unknown> = {};
+  const property: Record<string, unknown> = {};
+
+  const nameMatch = prompt.trim().match(/^(?:chị|chi|anh|ông|ong|bà|ba|cô|co)\s+([\p{L}\s]{2,60}?)(?=\s+\d{2}\s*(?:tuổi|tuoi)|,)/iu);
+  if (nameMatch?.[1]) demographic.name = nameMatch[1].trim();
+
+  const ageMatch = normalized.match(/\b(\d{2})\s*tuoi\b/);
+  if (ageMatch?.[1]) demographic.age = Number(ageMatch[1]);
+
+  if (/\b(doc than|don than|me don than|bo don than|chua ket hon)\b/.test(normalized)) {
+    demographic.maritalStatus = "single";
+  } else if (/\b(da ket hon|co vo|co chong|vo chong|ket hon)\b/.test(normalized)) {
+    demographic.maritalStatus = "married";
+  }
+
+  const phoneMatch = normalized.match(/\b((?:0|\+84)\d{9,10})\b/);
+  if (phoneMatch?.[1]) demographic.phone = phoneMatch[1];
+
+  const emailMatch = prompt.match(/[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+/);
+  if (emailMatch?.[0]) demographic.email = emailMatch[0];
+
+  const cccdMatch = normalized.match(/\b(?:cccd|cmnd|can cuoc)\D{0,12}(\d{9,12})\b/);
+  if (cccdMatch?.[1]) demographic.cccd = cccdMatch[1];
+
+  const loanMatch = normalized.match(/\b(?:vay|khoan vay|de nghi vay)\D{0,40}(\d+(?:[.,]\d+)?)\s*(ty|ti|trieu|nghin|k|vnd|dong)\b/);
+  const loanAmount = loanMatch ? parseVietnameseAmountVnd(loanMatch[1], loanMatch[2]) : undefined;
+  if (loanAmount) requestedLoan.amount = loanAmount;
+
+  if (/\b(tai cap von|refinance)\b/.test(normalized)) {
+    requestedLoan.type = "refinance";
+  } else if (/\b(the chap|mua nha|mortgage)\b/.test(normalized)) {
+    requestedLoan.type = "mortgage";
+  }
+
+  const tenureMatch = normalized.match(/\b(?:trong vong|thoi han|ky han)\D{0,16}(\d{1,2})\s*nam\b/);
+  if (tenureMatch?.[1]) requestedLoan.tenureYears = Number(tenureMatch[1]);
+
+  const propertyMatch = normalized.match(/\b(?:tai san|tsbd|the chap)\D{0,40}(\d+(?:[.,]\d+)?)\s*(ty|ti|trieu|nghin|k|vnd|dong)\b/);
+  const propertyValue = propertyMatch ? parseVietnameseAmountVnd(propertyMatch[1], propertyMatch[2]) : undefined;
+  if (propertyValue) {
+    property.value = propertyValue;
+    property.status = /\b(du an|hinh thanh trong tuong lai|future project)\b/.test(normalized) ? "future_project" : "completed";
+    if (/\b(dat|dat nen)\b/.test(normalized)) property.type = "land";
+    else if (/\b(nha|nha pho)\b/.test(normalized)) property.type = "house";
+    else property.type = "apartment";
+  }
+
+  const projectCodeMatch = prompt.match(/\b(?:projectCode|mã dự án|ma du an)\s*[:#-]?\s*([A-Z0-9_-]{3,})\b/i);
+  if (projectCodeMatch?.[1]) property.projectCode = projectCodeMatch[1];
+
+  if (Object.keys(demographic).length > 0) draft.demographic = demographic;
+  if (Object.keys(requestedLoan).length > 0) draft.requestedLoan = requestedLoan;
+  if (Object.keys(property).length > 0) {
+    draft.property = property;
+    draft.properties = [property];
+  }
+  if (/\b(khong co no|khong no|0 khoan no|khong co khoan no)\b/.test(normalized)) draft.currentDebts = [];
+  if (/\b(khong mua bao hiem|tu choi bao hiem|khong dang ky bao hiem)\b/.test(normalized)) draft.insurancePreference = "declined";
+  if (/\b(tu nguyen bao hiem|co nhu cau bao hiem|dang ky bao hiem)\b/.test(normalized)) draft.insurancePreference = "accepted";
+
+  return draft;
+};
+
 export const extractDraftCaseFromPrompt = async (prompt: string): Promise<Record<string, unknown>> => {
   try {
     const messages: ChatCompletionMessageParam[] = [
@@ -511,11 +607,12 @@ export const extractDraftCaseFromPrompt = async (prompt: string): Promise<Record
     const toolCall = response.choices[0].message.tool_calls?.[0];
     if (toolCall && toolCall.type === "function" && toolCall.function.name === "extract_draft_case") {
       const args = JSON.parse(toolCall.function.arguments) as Record<string, unknown>;
-      return (args.draftCase as Record<string, unknown>) || {};
+      const draftCase = (args.draftCase as Record<string, unknown>) || {};
+      return hasDraftData(draftCase) ? draftCase : extractLocalDraftCaseFromPrompt(prompt);
     }
-    return {};
+    return extractLocalDraftCaseFromPrompt(prompt);
   } catch (error) {
     console.error("Draft extraction failed:", error);
-    return {};
+    return extractLocalDraftCaseFromPrompt(prompt);
   }
 };

@@ -37,3 +37,16 @@ export const screenSecurityInput = (
   if (containsPii) return { status: "sanitized", sanitizedInput, signals: ["PII_MASKED"], containsPii };
   return { status: "accepted", sanitizedInput: input, signals: [], containsPii: false };
 };
+
+const collectStringValues = (value: unknown): string[] => {
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) return value.flatMap(collectStringValues);
+  if (value && typeof value === "object") return Object.values(value as Record<string, unknown>).flatMap(collectStringValues);
+  return [];
+};
+
+export const screenStructuredSecurityInput = (
+  input: unknown,
+  accessScopeValid = true
+): SecurityScreeningResult =>
+  screenSecurityInput(collectStringValues(input).join("\n"), accessScopeValid);

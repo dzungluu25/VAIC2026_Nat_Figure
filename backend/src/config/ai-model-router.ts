@@ -19,6 +19,13 @@ interface AiModelProfile {
   maxOutputTokens: number;
 }
 
+class AiCompletionTimeoutError extends Error {
+  constructor(task: AiTask, model: string, timeoutMs: number) {
+    super(`${task} model ${model} timed out after ${timeoutMs}ms.`);
+    this.name = "AiCompletionTimeoutError";
+  }
+}
+
 /**
  * One routing policy for every generative-AI request.
  *
@@ -63,29 +70,57 @@ type RoutedCompletionRequest = Omit<
   "model" | "max_tokens" | "stream"
 >;
 
+const runCompletionWithTimeout = async (
+  task: AiTask,
+  model: string,
+  request: RoutedCompletionRequest,
+  maxOutputTokens: number
+): Promise<ChatCompletion> => {
+  const client = getFptMarketplaceClient();
+  const controller = new AbortController();
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      controller.abort();
+      reject(new AiCompletionTimeoutError(task, model, config.llmRequestTimeoutMs));
+    }, config.llmRequestTimeoutMs);
+  });
+
+  const completionPromise = client.chat.completions.create(
+    {
+      ...request,
+      model,
+      max_tokens: maxOutputTokens,
+    },
+    {
+      timeout: config.llmRequestTimeoutMs,
+      signal: controller.signal,
+    }
+  );
+  completionPromise.catch(() => undefined);
+
+  try {
+    return await Promise.race([completionPromise, timeoutPromise]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+};
+
 export const createAiCompletion = async (
   task: AiTask,
   request: RoutedCompletionRequest
 ): Promise<ChatCompletion> => {
-  const client = getFptMarketplaceClient();
   const profile = AI_MODEL_PROFILES[task];
 
   try {
-    return await client.chat.completions.create({
-      ...request,
-      model: profile.primaryModel,
-      max_tokens: profile.maxOutputTokens,
-    });
+    return await runCompletionWithTimeout(task, profile.primaryModel, request, profile.maxOutputTokens);
   } catch (primaryError) {
     if (!profile.fallbackModel || profile.fallbackModel === profile.primaryModel) throw primaryError;
     console.warn(
       `[AI router] ${task} model ${profile.primaryModel} failed; retrying with ${profile.fallbackModel}.`,
       primaryError
     );
-    return client.chat.completions.create({
-      ...request,
-      model: profile.fallbackModel,
-      max_tokens: profile.maxOutputTokens,
-    });
+    return runCompletionWithTimeout(task, profile.fallbackModel, request, profile.maxOutputTokens);
   }
 };

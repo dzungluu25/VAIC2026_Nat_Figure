@@ -9,16 +9,44 @@ import { OrchestrationInputError } from "../services/orchestration/input-router.
 import { toPublicOrchestrationError } from "../services/orchestration/orchestration-error.service";
 import { regulatoryBaseline } from "../config/policy";
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value && typeof value === "object" && !Array.isArray(value));
+
+const structuredCasePrompt = (retailCase: unknown): string => {
+  if (!isRecord(retailCase)) return "Structured retail credit case submitted from form.";
+  const requestedLoan = isRecord(retailCase.requestedLoan) ? retailCase.requestedLoan : {};
+  const amount = typeof requestedLoan.amount === "number" ? ` Loan amount: ${requestedLoan.amount} VND.` : "";
+  const tenure = typeof requestedLoan.tenureYears === "number" ? ` Tenure: ${requestedLoan.tenureYears} years.` : "";
+  return `Structured retail credit case submitted from form.${amount}${tenure}`;
+};
+
+const parseOrchestrationBody = (body: unknown): OrchestrationRequest & { prompt: string } => {
+  const request = (isRecord(body) ? body : {}) as OrchestrationRequest;
+  const hasPrompt = typeof request.prompt === "string" && request.prompt.trim().length > 0;
+  const hasRetailCaseField = Object.prototype.hasOwnProperty.call(request, "retailCase");
+  const hasRetailCase = isRecord(request.retailCase);
+  if (request.prompt !== undefined && typeof request.prompt !== "string") {
+    throw new OrchestrationInputError("INVALID_INPUT", "Prompt must be a string when provided.");
+  }
+  if (hasRetailCaseField && !hasRetailCase) {
+    throw new OrchestrationInputError("INVALID_INPUT", "retailCase must be an object when provided.");
+  }
+  if (!hasPrompt && !hasRetailCase) {
+    throw new OrchestrationInputError("INVALID_INPUT", "Prompt or retailCase is required.");
+  }
+  return {
+    ...request,
+    prompt: hasPrompt ? request.prompt!.trim() : structuredCasePrompt(request.retailCase),
+  };
+};
+
 export const orchestratePrompt = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { prompt, approvalToken, caseId } = req.body as OrchestrationRequest;
-    if (typeof prompt !== "string" || !prompt.trim()) {
-      return res.status(400).json({ error: "Prompt is required" });
-    }
+    const { prompt, retailCase, approvalToken, caseId } = parseOrchestrationBody(req.body);
     // req.user is guaranteed by the requireAuth middleware mounted on this route.
     const requestedBy = req.user!.sub;
 
-    const result = await executeOrchestration(prompt, requestedBy, approvalToken, caseId, req.user!.tenantId);
+    const result = await executeOrchestration(prompt, requestedBy, approvalToken, caseId, req.user!.tenantId, retailCase);
     return res.status(200).json(result);
   } catch (error) {
     if (error instanceof OrchestrationInputError) {
@@ -36,10 +64,16 @@ export const orchestratePrompt = async (req: AuthenticatedRequest, res: Response
  * this is a POST carrying an Authorization header, which EventSource cannot send.
  */
 export const orchestratePromptStream = async (req: AuthenticatedRequest, res: Response) => {
-  const { prompt, approvalToken, caseId } = req.body as OrchestrationRequest;
-  if (typeof prompt !== "string" || !prompt.trim()) {
-    return res.status(400).json({ error: "Prompt is required" });
+  let request: OrchestrationRequest & { prompt: string };
+  try {
+    request = parseOrchestrationBody(req.body);
+  } catch (error) {
+    if (error instanceof OrchestrationInputError) {
+      return res.status(422).json({ error: error.message, code: error.code, questions: error.questions });
+    }
+    return res.status(400).json({ error: "Invalid orchestration request", code: "INVALID_INPUT" });
   }
+  const { prompt, retailCase, approvalToken, caseId } = request;
   const requestedBy = req.user!.sub;
 
   res.setHeader("Content-Type", "application/x-ndjson");
@@ -51,7 +85,7 @@ export const orchestratePromptStream = async (req: AuthenticatedRequest, res: Re
   };
 
   try {
-    await streamOrchestration(prompt, requestedBy, approvalToken, writeEvent, caseId, req.user!.tenantId);
+    await streamOrchestration(prompt, requestedBy, approvalToken, writeEvent, caseId, req.user!.tenantId, retailCase);
   } catch (error) {
     if (error instanceof OrchestrationInputError) {
       writeEvent({ type: "error", message: error.message, code: error.code, questions: error.questions });
