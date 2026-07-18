@@ -160,17 +160,13 @@ const validateExtractedCase = (value: unknown): Omit<RetailCase, "caseId" | "cus
   const raw = value as Record<string, unknown>;
 
   const demographic = raw.demographic as Record<string, unknown> | undefined;
-  if (
-    !demographic ||
-    !isNonEmptyString(demographic.name) ||
-    typeof demographic.age !== "number" ||
-    !MARITAL_STATUSES.has(String(demographic.maritalStatus)) ||
-    !isNonEmptyString(demographic.cccd) ||
-    !isNonEmptyString(demographic.phone) ||
-    !isNonEmptyString(demographic.email)
-  ) {
-    throw new Error("Extracted case has invalid or incomplete demographic data.");
-  }
+  if (!demographic) throw new Error("Demographic object is missing.");
+  if (!isNonEmptyString(demographic.name)) throw new Error(`Name is invalid: ${JSON.stringify(demographic.name)}`);
+  if (typeof demographic.age !== "number") throw new Error(`Age is invalid (not a number): ${JSON.stringify(demographic.age)} (${typeof demographic.age})`);
+  if (!MARITAL_STATUSES.has(String(demographic.maritalStatus))) throw new Error(`Marital status is invalid: ${JSON.stringify(demographic.maritalStatus)}`);
+  if (!isNonEmptyString(demographic.cccd)) throw new Error(`CCCD is invalid: ${JSON.stringify(demographic.cccd)}`);
+  if (!isNonEmptyString(demographic.phone)) throw new Error(`Phone is invalid: ${JSON.stringify(demographic.phone)}`);
+  if (!isNonEmptyString(demographic.email)) throw new Error(`Email is invalid: ${JSON.stringify(demographic.email)}`);
 
   if (!Array.isArray(raw.incomeSources) || raw.incomeSources.length === 0) {
     throw new Error("Extracted case has no income sources.");

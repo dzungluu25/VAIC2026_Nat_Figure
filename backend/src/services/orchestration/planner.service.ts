@@ -19,6 +19,8 @@ import { Command } from "@langchain/langgraph";
 import { getLatestApproval } from "../platform/approval.service";
 import { getTenantConfigVersion } from "../platform/tenant-config.service";
 import { pgQuery } from "../../config/pg";
+import { getFptMarketplaceClient } from "../../config/fpt-marketplace";
+import { config } from "../../config/env";
 
 // Order matters: within the self-correction chunk, selfCorrectionTrace, productTrace and
 // legalTrace all change simultaneously (one graph step) — scanning selfCorrection before
@@ -43,6 +45,38 @@ const attachInterruptMetadata=async(runId:string,state:OrchestrationState):Promi
   const normalized={...state} as OrchestrationState&{__interrupt__?:unknown[]};delete normalized.__interrupt__;
   if(interrupts.length)normalized.__interrupt__=interrupts;
   return normalized;
+};
+
+const DOUBLE_CHECK_SYSTEM_PROMPT = `Bạn là Chuyên gia Kiểm duyệt Tín dụng của SHB. Nhiệm vụ của bạn là kiểm duyệt và tinh chỉnh câu trả lời của Trợ lý ảo AI trước khi gửi cho chuyên viên tín dụng.
+
+QUY TẮC KIỂM DUYỆT:
+1. Đảm bảo câu trả lời sử dụng thuật ngữ ngân hàng chính xác, lịch sự, chuyên nghiệp, bằng tiếng Việt.
+2. Giữ nguyên phán quyết cuối cùng (phê duyệt, từ chối, chờ phê duyệt, hoặc hướng dẫn bổ sung thông tin). KHÔNG thay đổi bản chất của quyết định.
+3. Nếu câu trả lời có chứa lỗi chính tả, câu cú lủng củng hoặc chưa rõ nghĩa, hãy sửa lại cho mượt mà, chuyên nghiệp hơn.
+4. Trả về chính xác câu trả lời đã được tinh chỉnh, không thêm bớt lời dẫn như "Dưới đây là câu trả lời..." hoặc "Tôi đã kiểm duyệt...".
+5. Phải giữ nguyên các nhãn quyết định nằm trong ngoặc vuông như [DUYỆT NHANH], [ĐÃ PHÊ DUYỆT], [ĐỀ XUẤT PHÊ DUYỆT], [HỘI ĐỒNG PHÁN QUYẾT: PHÊ DUYỆT CÓ ĐIỀU KIỆN], [CHỜ XỬ LÝ CON NGƯỜI], [TỪ CHỐI PHÊ DUYỆT], hoặc các tiêu đề tương tự ở đầu câu trả lời.`;
+
+const doubleCheckAnswerWithLlm = async (finalAnswer: string, originalPrompt: string): Promise<string> => {
+  try {
+    const client = getFptMarketplaceClient();
+    const response = await client.chat.completions.create({
+      model: config.fptLegalModel,
+      messages: [
+        { role: "system", content: DOUBLE_CHECK_SYSTEM_PROMPT },
+        { role: "user", content: `Yêu cầu gốc: "${originalPrompt}"\nCâu trả lời cần kiểm duyệt:\n"${finalAnswer}"` }
+      ],
+      temperature: 0.1
+    });
+    const checked = response.choices[0].message.content?.trim();
+    if (checked) {
+      console.log(`[DoubleCheck LLM] Original: "${finalAnswer}" -> Checked: "${checked}"`);
+      return checked;
+    }
+    return finalAnswer;
+  } catch (error) {
+    console.error("Double-check LLM call failed, falling back to original answer:", error);
+    return finalAnswer;
+  }
 };
 
 /** Shared response assembly for both the synchronous and streaming entry points. */
@@ -135,7 +169,9 @@ const buildOrchestrationResponse = async (
   }
   if(finalState.manualInterventionRequired) finalAnswer="[DỪNG AN TOÀN] Action hoặc compensation thất bại; workflow đã khóa và yêu cầu can thiệp thủ công.";
 
-  const transparentAnswer = buildAnswerTransparency(finalAnswer, rawTraces, finalDecision, approvalMode, requiredFixes);
+  const checkedAnswer = await doubleCheckAnswerWithLlm(finalAnswer, finalState.prompt);
+
+  const transparentAnswer = buildAnswerTransparency(checkedAnswer, rawTraces, finalDecision, approvalMode, requiredFixes);
 
   // Cost budget calculation
   const missingConsent = !retailCase.consent.credit_check || !retailCase.consent.tax_income_check;
@@ -194,6 +230,7 @@ const buildOrchestrationResponse = async (
  */
 const runAdvisoryFlow = async (runId: string, prompt: string, requestedBy: string, intent: "ADVISORY_QA" | "OUT_OF_DOMAIN"): Promise<AdvisoryResponse> => {
   const { trace, finalAnswer } = await runAdvisoryAgent(runId, prompt, intent);
+  const checkedAnswer = await doubleCheckAnswerWithLlm(finalAnswer, prompt);
   await recordAuditEvent(
     runId,
     requestedBy,
@@ -202,7 +239,7 @@ const runAdvisoryFlow = async (runId: string, prompt: string, requestedBy: strin
     "allowed",
     `Chuyên viên ${requestedBy} gửi yêu cầu được phân loại là ${intent} — không đi qua luồng thẩm định tín dụng.`
   );
-  return { mode: intent, runId, finalAnswer, plannerTrace: trace, auditEvents: await getAuditEventsByRun(runId) };
+  return { mode: intent, runId, finalAnswer: checkedAnswer, plannerTrace: trace, auditEvents: await getAuditEventsByRun(runId) };
 };
 
 /**
