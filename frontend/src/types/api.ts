@@ -183,6 +183,33 @@ export interface OrchestrationResponse {
 
 export type RiskTier = "FAST" | "COMPLEX";
 
+export interface RetailCaseInput {
+  demographic: {
+    name: string;
+    age: number;
+    maritalStatus: "single" | "married";
+    cccd: string;
+    phone: string;
+    email: string;
+  };
+  incomeSources: Array<{ type: "salary" | "freelance" | "rental"; amount: number; evidence: string }>;
+  currentDebts: Array<{ type: "auto" | "credit_card" | "other"; monthlyOwed: number; outstandingAmount: number; limit?: number; evidence: string }>;
+  requestedLoan: { type: "mortgage" | "refinance"; amount: number; tenureYears: number };
+  property: { type: "apartment" | "land" | "house"; value: number; status: "completed" | "future_project"; projectCode?: string; evidence: string };
+  properties?: Array<{ type: "apartment" | "land" | "house"; value: number; status: "completed" | "future_project"; projectCode?: string; evidence: string }>;
+  refinanceAutoLoan?: { remainingPrincipal: number; monthlyPayment: number };
+  consent: { credit_check: boolean; tax_income_check: boolean; social_insurance_check: boolean; marketing: boolean };
+  insurancePreference: "accepted" | "declined";
+  additionalContext?: string;
+}
+
+export interface OrchestrationRequestBody {
+  prompt?: string;
+  retailCase?: RetailCaseInput;
+  approvalToken?: string;
+  caseId?: string;
+}
+
 /**
  * Returned instead of OrchestrationResponse when the backend's intent classifier routes
  * a request away from the credit pipeline entirely (see backend intent-classifier.service.ts

@@ -4,10 +4,10 @@ import { RetailCase } from "../../types/case.types";
 import { loadRetailCase } from "../data/retail-case-loader";
 import { maskPiiPayload } from "../governance/pii-masking.service";
 import { recordAuditEvent, getAuditEventsByRun } from "../governance/audit-log.service";
-import { screenSecurityInput } from "../governance/input-security.service";
+import { screenSecurityInput, screenStructuredSecurityInput } from "../governance/input-security.service";
 import { saveOrchestrationRun } from "./trace.service";
 import { orchestrationGraph, assembleTraces, OrchestrationState } from "./orchestration-graph";
-import { routeOrExtractInput, OrchestrationInputError, InputRoutingOrExtractionResult } from "./input-router.service";
+import { routeOrExtractInput, routeStructuredRetailCaseInput, OrchestrationInputError, InputRoutingOrExtractionResult } from "./input-router.service";
 import { classifyIntent } from "./intent-classifier.service";
 import { runAdvisoryAgent } from "../agents/advisory.agent";
 import { buildAnswerTransparency } from "../governance/citation-governance.service";
@@ -372,18 +372,21 @@ export const executeOrchestration = async (
   requestedBy: string,
   approvalToken?: string,
   requestedCaseId?: string,
-  tenantId = "bank-default"
+  tenantId = "bank-default",
+  retailCaseInput?: Omit<RetailCase, "caseId" | "customerId">
 ): Promise<OrchestrationResponse | AdvisoryResponse> => {
   const runId = `run-${randomUUID()}`;
 
-  const security = screenSecurityInput(prompt);
+  const security = retailCaseInput ? screenStructuredSecurityInput(retailCaseInput) : screenSecurityInput(prompt);
   if (security.status === "rejected") return runSecurityBlockedFlow(runId, security.sanitizedInput, requestedBy, security.signals[0], tenantId);
-  const securedPrompt = security.sanitizedInput;
+  const securedPrompt = retailCaseInput ? prompt : security.sanitizedInput;
 
   const binding = await resolveRuntimeBinding(tenantId);
   let routed: InputRoutingOrExtractionResult;
 
-  if (!requestedCaseId) {
+  if (retailCaseInput) {
+    routed = await routeStructuredRetailCaseInput(retailCaseInput, tenantId);
+  } else if (!requestedCaseId) {
     const [intentResult, routedResult] = await Promise.all([
       classifyIntent(securedPrompt),
       routeOrExtractInput(securedPrompt, requestedCaseId, tenantId)
@@ -457,22 +460,25 @@ export const streamOrchestration = async (
   approvalToken: string | undefined,
   onEvent: (event: OrchestrationStreamEvent) => void,
   requestedCaseId?: string,
-  tenantId = "bank-default"
+  tenantId = "bank-default",
+  retailCaseInput?: Omit<RetailCase, "caseId" | "customerId">
 ): Promise<void> => {
   const runId = `run-${randomUUID()}`;
-  const security = screenSecurityInput(prompt);
+  const security = retailCaseInput ? screenStructuredSecurityInput(retailCaseInput) : screenSecurityInput(prompt);
   if (security.status === "rejected") {
     const response = await runSecurityBlockedFlow(runId, security.sanitizedInput, requestedBy, security.signals[0], tenantId);
     onEvent({ type: "node_update", node: "planner", trace: response.traces[0] });
     onEvent({ type: "final", response });
     return;
   }
-  const securedPrompt = security.sanitizedInput;
+  const securedPrompt = retailCaseInput ? prompt : security.sanitizedInput;
 
   const binding = await resolveRuntimeBinding(tenantId);
   let routed: InputRoutingOrExtractionResult;
 
-  if (!requestedCaseId) {
+  if (retailCaseInput) {
+    routed = await routeStructuredRetailCaseInput(retailCaseInput, tenantId);
+  } else if (!requestedCaseId) {
     const [intentResult, routedResult] = await Promise.all([
       classifyIntent(securedPrompt),
       routeOrExtractInput(securedPrompt, requestedCaseId, tenantId)
