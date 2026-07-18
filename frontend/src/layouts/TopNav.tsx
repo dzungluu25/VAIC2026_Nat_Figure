@@ -1,4 +1,4 @@
-import { Activity, ArrowUpRight, BrainCircuit, ChartNoAxesCombined, ClipboardList, LogOut, SlidersHorizontal, Sparkles } from "lucide-react";
+import { Activity, BrainCircuit, ChartNoAxesCombined, ClipboardList, SlidersHorizontal, Sparkles } from "lucide-react";
 import { Link, NavLink } from "react-router-dom";
 import { useSessionStore } from "../store/sessionStore";
 import type { UserRole } from "../types/api";
@@ -38,20 +38,6 @@ export const TopNav = () => {
           </NavLink>
         ))}
       </nav>
-
-      <div className={styles.homeLink}>
-        <span style={{
-          padding: "3px 8px",
-          backgroundColor: "#123c32",
-          color: "#ffffff",
-          borderRadius: "6px",
-          fontSize: "9px",
-          letterSpacing: "0.05em",
-          fontWeight: 700
-        }}>
-          CREDIT APPROVER
-        </span>
-      </div>
     </div>
   </header>
   );

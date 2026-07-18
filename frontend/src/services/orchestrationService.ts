@@ -51,3 +51,6 @@ export interface SavedRunResult { saved: true; runId: string; dossier: { dossier
 
 export const saveRun = (runId: string, token: string): Promise<SavedRunResult> =>
   apiFetch<SavedRunResult>(`/api/runs/${runId}/save`, { method: "POST", token });
+
+export const extractDraftCase = (prompt: string, token: string): Promise<Record<string, any>> =>
+  apiFetch<Record<string, any>>("/api/orchestrate/extract", { method: "POST", body: { prompt }, token });

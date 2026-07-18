@@ -1,6 +1,7 @@
 import { Response } from "express";
 import { executeOrchestration, streamOrchestration } from "../services/orchestration/planner.service";
 import { getOrchestrationRun } from "../services/orchestration/trace.service";
+import { extractDraftCaseFromPrompt } from "../services/orchestration/case-extraction.service";
 import { OrchestrationRequest, OrchestrationStreamEvent } from "../types/orchestration.types";
 import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { AGENT_CONTRACTS } from "../services/orchestration/agent-role-registry";
@@ -84,3 +85,17 @@ export const getAgentContracts = async (_req: AuthenticatedRequest, res: Respons
 
 export const getRegulatoryBaseline = async (_req: AuthenticatedRequest, res: Response) =>
   res.status(200).json(regulatoryBaseline);
+
+export const extractDraftCase = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { prompt } = req.body as { prompt: string };
+    if (typeof prompt !== "string" || !prompt.trim()) {
+      return res.status(400).json({ error: "Prompt is required" });
+    }
+    const result = await extractDraftCaseFromPrompt(prompt.trim());
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error("Draft extraction handler error:", error);
+    return res.status(500).json({ error: "Internal server error performing draft extraction" });
+  }
+};

@@ -10,12 +10,36 @@ import { PolicyConsolePage } from "./pages/PolicyConsolePage";
 import { getDemoApproverSession } from "./services/authService";
 import { useSessionStore } from "./store/sessionStore";
 
+const isTokenExpired = (token: string): boolean => {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return true;
+    // Use standard base64 decoding supporting utf-8
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const jsonPayload = decodeURIComponent(
+      window
+        .atob(base64)
+        .split("")
+        .map(c => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+        .join("")
+    );
+    const payload = JSON.parse(jsonPayload);
+    if (typeof payload.exp !== "number") return true;
+    return payload.exp < Date.now() / 1000 - 10;
+  } catch {
+    return true;
+  }
+};
+
 const AutoLoginWrapper = ({ children }: { children: React.ReactNode }) => {
   const { accessToken, setSession } = useSessionStore();
-  const [loading, setLoading] = useState(!accessToken);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!accessToken) {
+    const hasValidToken = accessToken && !isTokenExpired(accessToken);
+    if (!hasValidToken) {
+      setLoading(true);
       getDemoApproverSession()
         .then(session => {
           setSession({
@@ -29,6 +53,8 @@ const AutoLoginWrapper = ({ children }: { children: React.ReactNode }) => {
           console.error("Auto login failed:", err);
           setLoading(false);
         });
+    } else {
+      setLoading(false);
     }
   }, [accessToken, setSession]);
 

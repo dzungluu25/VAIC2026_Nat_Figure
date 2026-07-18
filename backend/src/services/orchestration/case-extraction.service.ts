@@ -409,3 +409,131 @@ export const extractCaseFromPrompt = async (prompt: string): Promise<CaseExtract
     return EXTRACTION_UNAVAILABLE_RESULT;
   }
 };
+
+const DRAFT_RETAIL_CASE_SCHEMA = {
+  type: "object",
+  properties: {
+    demographic: {
+      type: "object",
+      properties: {
+        name: { type: "string" },
+        age: { type: "number" },
+        maritalStatus: { type: "string", enum: ["single", "married"] },
+        cccd: { type: "string" },
+        phone: { type: "string" },
+        email: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+    incomeSources: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          type: { type: "string", enum: ["salary", "freelance", "rental"] },
+          amount: { type: "number" },
+          evidence: { type: "string" },
+        },
+        additionalProperties: false,
+      },
+    },
+    currentDebts: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          type: { type: "string", enum: ["auto", "credit_card", "other"] },
+          monthlyOwed: { type: "number" },
+          outstandingAmount: { type: "number" },
+          limit: { type: ["number", "null"] },
+          evidence: { type: "string" },
+        },
+        additionalProperties: false,
+      },
+    },
+    requestedLoan: {
+      type: "object",
+      properties: {
+        type: { type: "string", enum: ["mortgage", "refinance"] },
+        amount: { type: "number" },
+        tenureYears: { type: "number" },
+      },
+      additionalProperties: false,
+    },
+    property: {
+      type: "object",
+      properties: {
+        type: { type: "string", enum: ["apartment", "land", "house"] },
+        value: { type: "number" },
+        status: { type: "string", enum: ["completed", "future_project"] },
+        projectCode: { type: ["string", "null"] },
+        evidence: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+    consent: {
+      type: "object",
+      properties: {
+        credit_check: { type: "boolean" },
+        tax_income_check: { type: "boolean" },
+        social_insurance_check: { type: "boolean" },
+        marketing: { type: "boolean" },
+      },
+      additionalProperties: false,
+    },
+    insurancePreference: { type: "string", enum: ["accepted", "declined"] },
+  },
+  additionalProperties: false,
+};
+
+const DRAFT_TOOLS: ChatCompletionTool[] = [
+  {
+    type: "function",
+    function: {
+      name: "extract_draft_case",
+      description: "Trích xuất tối đa các thông tin khách hàng có sẵn trong văn bản để điền nháp vào form. Không tự bịa thông tin.",
+      parameters: { type: "object", properties: { draftCase: DRAFT_RETAIL_CASE_SCHEMA }, required: ["draftCase"], additionalProperties: false },
+    },
+  },
+];
+
+export const extractDraftCaseFromPrompt = async (prompt: string): Promise<Record<string, unknown>> => {
+  try {
+    const client = getFptMarketplaceClient();
+    const messages: ChatCompletionMessageParam[] = [
+      {
+        role: "system",
+        content: "Bạn là trợ lý trích xuất thông tin hồ sơ tín dụng. Hãy đọc văn bản tự nhiên của người dùng và gọi tool extract_draft_case để trích xuất các trường thông tin có sẵn. Chỉ điền những trường thực sự xuất hiện trong văn bản, các trường khác để trống."
+      },
+      { role: "user", content: prompt },
+    ];
+
+    let response;
+    try {
+      response = await client.chat.completions.create({
+        model: config.fptExtractionModel,
+        messages,
+        tools: DRAFT_TOOLS,
+        tool_choice: { type: "function", function: { name: "extract_draft_case" } },
+      });
+    } catch (primaryError) {
+      console.warn("Draft extraction model failed, retrying with fallback:", primaryError);
+      response = await client.chat.completions.create({
+        model: config.fptLegalModel,
+        messages,
+        tools: DRAFT_TOOLS,
+        tool_choice: { type: "function", function: { name: "extract_draft_case" } },
+      });
+    }
+
+    const toolCall = response.choices[0].message.tool_calls?.[0];
+    if (toolCall && toolCall.type === "function" && toolCall.function.name === "extract_draft_case") {
+      const args = JSON.parse(toolCall.function.arguments) as Record<string, unknown>;
+      return (args.draftCase as Record<string, unknown>) || {};
+    }
+    return {};
+  } catch (error) {
+    console.error("Draft extraction failed:", error);
+    return {};
+  }
+};
