@@ -1,10 +1,11 @@
-import { AgentRole, AgentStatus } from "./agent.types";
+import { AgentRole, AgentStatus, DecisionEnvelope } from "./agent.types";
 
 export interface ToolCallTrace {
   toolName: string;
   input: Record<string, unknown>;
   output: Record<string, unknown>;
   status: "success" | "failed";
+  sideEffectLevel?: "LOW" | "MEDIUM" | "HIGH";
 }
 
 export interface AgentTrace {
@@ -17,7 +18,7 @@ export interface AgentTrace {
   toolCalls: ToolCallTrace[];
   startedAt: string;
   completedAt?: string;
-  findings?: any[]; // Holds decision envelopes if any
+  findings?: DecisionEnvelope[];
 }
 
 export interface AuditEvent {

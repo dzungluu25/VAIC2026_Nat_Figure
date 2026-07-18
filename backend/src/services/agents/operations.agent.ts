@@ -150,6 +150,23 @@ export const runOperationsAgent = async (
     });
   }
 
+  const enrichedToolCalls: ToolCallTrace[] = toolCalls.map(call => ({
+    ...call,
+    sideEffectLevel: call.sideEffectLevel ?? (
+      call.toolName === "registerCoreBankingFacility"
+        ? "HIGH"
+        : call.toolName.includes("Notification") || call.toolName.includes("escalate")
+          ? "MEDIUM"
+          : "LOW"
+    ),
+  }));
+
+  for (const call of enrichedToolCalls) {
+    if (call.status === "success" && (call.sideEffectLevel === "MEDIUM" || call.sideEffectLevel === "HIGH")) {
+      await recordAuditEvent(runId, "operations-agent", "tool_call", { toolName: call.toolName, output: call.output }, "allowed");
+    }
+  }
+
   return {
     trace: {
       id: `trace-ops-${Date.now()}`,
@@ -158,7 +175,7 @@ export const runOperationsAgent = async (
       task: "Execute banking operations and create records",
       status,
       summary,
-      toolCalls,
+      toolCalls: enrichedToolCalls,
       startedAt,
       completedAt: new Date().toISOString()
     },

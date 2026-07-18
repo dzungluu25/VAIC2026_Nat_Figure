@@ -1,9 +1,11 @@
-import { AgentTrace } from "../../types/trace.types";
 import { DecisionEnvelope } from "../../types/agent.types";
-import { loadRetailCase } from "../data/retail-case-loader";
-import { runLegalComplianceReasoning } from "../rag/legal-reasoning.service";
+import { AgentTrace } from "../../types/trace.types";
+import { productCatalog } from "../../config/policy";
 import { groundLegalFindings } from "../governance/citation-governance.service";
 import { getCachedPolicy, setCachedPolicy } from "../governance/semantic-cache.service";
+import { loadRetailCase } from "../data/retail-case-loader";
+import { queryProjectGuarantee } from "../rag/policy-rag.service";
+import { runLegalComplianceReasoning } from "../rag/legal-reasoning.service";
 
 const STATUS_RANK: Record<DecisionEnvelope["status"], number> = {
   PASS: 0,
@@ -15,19 +17,133 @@ const STATUS_RANK: Record<DecisionEnvelope["status"], number> = {
 
 const worstStatus = (findings: DecisionEnvelope[]): DecisionEnvelope["status"] =>
   findings.reduce<DecisionEnvelope["status"]>(
-    (acc, f) => (STATUS_RANK[f.status] > STATUS_RANK[acc] ? f.status : acc),
+    (acc, finding) => (STATUS_RANK[finding.status] > STATUS_RANK[acc] ? finding.status : acc),
     "PASS"
   );
 
-export const runLegalAgent = async (
+const legalFinding = (
+  finding: Omit<DecisionEnvelope, "agent" | "citations">
+): DecisionEnvelope => ({
+  ...finding,
+  agent: "legal",
+  citations: [],
+});
+
+const ground = (findings: DecisionEnvelope[]): DecisionEnvelope[] =>
+  findings.length ? groundLegalFindings(findings) : [];
+
+export const runLegalPrecheckAgent = async (
+  runId: string,
+  caseId: string
+): Promise<AgentTrace> => {
+  const startedAt = new Date().toISOString();
+  const retailCase = await loadRetailCase(caseId);
+
+  if (!retailCase) {
+    return {
+      id: `trace-legal-precheck-${Date.now()}`,
+      runId,
+      agent: "legal",
+      task: "Run deterministic legal pre-checks",
+      status: "failed",
+      summary: "Case data not found.",
+      toolCalls: [],
+      startedAt,
+      completedAt: new Date().toISOString(),
+    };
+  }
+
+  const rawFindings: DecisionEnvelope[] = [];
+  const toolCalls: AgentTrace["toolCalls"] = [];
+
+  if (!retailCase.consent.credit_check || !retailCase.consent.tax_income_check || !retailCase.consent.social_insurance_check) {
+    rawFindings.push(legalFinding({
+      decisionId: `legal-consent-${Date.now()}`,
+      status: "BLOCKED",
+      severity: "BLOCKER",
+      blocksAt: "EXTERNAL_DATA_CALL",
+      finding: "Khach hang chua co day du consent rieng cho external data enrichment; external calls must be blocked.",
+      evidence: {
+        credit_check: retailCase.consent.credit_check,
+        tax_income_check: retailCase.consent.tax_income_check,
+        social_insurance_check: retailCase.consent.social_insurance_check,
+      },
+      ruleIds: ["LEGAL_CONSENT_MISSING"],
+      requiredFix: "Collect valid customer consent before calling CIC, tax, social insurance, or any third-party data source.",
+    }));
+  }
+
+  if (retailCase.demographic.maritalStatus === "married") {
+    rawFindings.push(legalFinding({
+      decisionId: `legal-marital-${Date.now()}`,
+      status: "CONDITIONAL_PASS",
+      severity: "CONDITION",
+      blocksAt: "CONTRACT_SIGNING",
+      finding: "Collateral formed during marriage requires spouse signature or evidence that it is separate property before contract signing.",
+      evidence: {
+        maritalStatus: retailCase.demographic.maritalStatus,
+        propertyStatus: retailCase.property.status,
+      },
+      ruleIds: ["LEGAL_MARITAL_SIGNATURE_MISSING"],
+      requiredFix: "Add spouse signature or proof of separate property before signing the secured transaction contract.",
+    }));
+  }
+
+  if (retailCase.property.status === "future_project") {
+    const project = retailCase.property.projectCode ? await queryProjectGuarantee(retailCase.property.projectCode) : null;
+    toolCalls.push({
+      toolName: "get_project_guarantee_status",
+      input: { projectCode: retailCase.property.projectCode ?? null },
+      output: project ? { ...project, found: true } : { found: false },
+      status: "success",
+      sideEffectLevel: "LOW",
+    });
+
+    if (!project?.isGuaranteedBySHB) {
+      rawFindings.push(legalFinding({
+        decisionId: `legal-project-${Date.now()}`,
+        status: "CONDITIONAL_PASS",
+        severity: "CONDITION",
+        blocksAt: "DISBURSEMENT",
+        finding: "Future-property project guarantee or lien-release evidence is not verified in the demo knowledge graph.",
+        evidence: {
+          projectCode: retailCase.property.projectCode,
+          guaranteeFound: Boolean(project?.isGuaranteedBySHB),
+        },
+        ruleIds: ["LEGAL_FUTURE_PROPERTY_GUARANTEE"],
+        requiredFix: "Provide project guarantee or lien-release evidence before disbursement.",
+      }));
+    }
+  }
+
+  const findings = ground(rawFindings);
+  const blocking = findings.some(finding => finding.status === "BLOCKED" || finding.status === "VIOLATION" || finding.status === "FAIL");
+
+  return {
+    id: `trace-legal-precheck-${Date.now()}`,
+    runId,
+    agent: "legal",
+    task: "Run deterministic legal pre-checks",
+    status: blocking ? "blocked" : "completed",
+    summary: findings.length
+      ? `Legal pre-check completed with ${findings.length} finding(s): ${findings.map(finding => finding.ruleIds.join(",")).join("; ")}.`
+      : "Legal pre-check completed. No consent, marital-property, or future-property blocker found in the P0 rule pack.",
+    toolCalls,
+    findings,
+    startedAt,
+    completedAt: new Date().toISOString(),
+  };
+};
+
+export const runLegalGateAgent = async (
   runId: string,
   caseId: string,
   prompt: string,
-  productFindings: any[], // To retrieve product pricing offer
-  creditFindings: any[]   // To retrieve credit assessment details
+  productFindings: DecisionEnvelope[],
+  creditFindings: DecisionEnvelope[],
+  precheckFindings: DecisionEnvelope[] = []
 ): Promise<AgentTrace> => {
   const startedAt = new Date().toISOString();
-
   const retailCase = await loadRetailCase(caseId);
 
   if (!retailCase) {
@@ -40,19 +156,31 @@ export const runLegalAgent = async (
       summary: "Case data not found.",
       toolCalls: [],
       startedAt,
-      completedAt: new Date().toISOString()
+      completedAt: new Date().toISOString(),
     };
   }
 
-  // Structural facts already established elsewhere in the pipeline (not raw PII) — the LLM
-  // reasons over these to decide which RAG-backed compliance checks apply and how to ground
-  // each finding in an actual Neo4j lookup, instead of the fixed if/else branching this agent
-  // used to run.
   const hasInsuranceTyingSignal = productFindings.some(
-    f => f.ruleIds?.includes("PRODUCT_PRICING_INSURANCE_TYING") && f.evidence?.insuranceTyingApplied
+    finding => finding.ruleIds.includes(productCatalog.ruleIds.insuranceTying) && Boolean(finding.evidence.insuranceTyingApplied)
   );
 
-  const cacheKey = `legal-policy:${caseId}:tying:${hasInsuranceTyingSignal}`;
+  const gateFindings = hasInsuranceTyingSignal
+    ? ground([legalFinding({
+      decisionId: `legal-insurance-${Date.now()}`,
+      status: "VIOLATION",
+      severity: "BLOCKER",
+      blocksAt: "APPROVAL",
+      finding: "Preferential loan pricing must not be conditioned on purchasing non-mandatory insurance.",
+      evidence: {
+        insuranceTyingApplied: true,
+        productRuleIds: productFindings.flatMap(finding => finding.ruleIds),
+      },
+      ruleIds: [productCatalog.ruleIds.legalInsuranceTying],
+      requiredFix: "Remove insurance_purchase from pricing function and re-price.",
+    })])
+    : [];
+
+  const cacheKey = `legal-gate:${caseId}:tying:${hasInsuranceTyingSignal}:precheck:${precheckFindings.map(finding => finding.ruleIds.join("|")).join(",")}`;
   const cachedTraceStr = await getCachedPolicy(cacheKey);
   if (cachedTraceStr) {
     try {
@@ -62,58 +190,63 @@ export const runLegalAgent = async (
       cachedTrace.startedAt = startedAt;
       cachedTrace.completedAt = new Date().toISOString();
       return cachedTrace;
-    } catch (e) {
-      console.warn("Failed to parse cached legal policy trace, recalculating:", e);
+    } catch (error) {
+      console.warn("Failed to parse cached legal gate trace, recalculating:", error);
     }
   }
 
-  let findings: DecisionEnvelope[];
-  let toolCalls: AgentTrace["toolCalls"];
+  let findings = [...precheckFindings, ...gateFindings];
+  let toolCalls: AgentTrace["toolCalls"] = [];
+  let reasoningMode = "deterministic_fallback";
 
   try {
     const result = await runLegalComplianceReasoning(retailCase, prompt, hasInsuranceTyingSignal);
-    // Never trust free-form legal citations generated by the model. Rebuild them from
-    // the allow-listed source catalog, keyed by rule ID; unsupported rules fail closed.
-    findings = groundLegalFindings(result.findings);
+    const llmFindings = groundLegalFindings(result.findings);
+    const seen = new Set(findings.map(finding => finding.ruleIds.join("|")));
+    findings = [...findings, ...llmFindings.filter(finding => !seen.has(finding.ruleIds.join("|")))];
     toolCalls = result.toolCalls;
-  } catch (err) {
-    console.error("Legal Agent: LLM compliance reasoning failed:", err);
-    return {
-      id: `trace-legal-${Date.now()}`,
-      runId,
-      agent: "legal",
-      task: "Verify compliance and legal regulations",
-      status: "failed",
-      summary: "Soát xét pháp lý bằng AI thất bại — hồ sơ cần được chuyển sang hàng đợi soát xét thủ công để đảm bảo an toàn tuân thủ.",
-      toolCalls: [],
-      findings: [],
-      startedAt,
-      completedAt: new Date().toISOString()
-    };
+    reasoningMode = "llm_graphrag_with_deterministic_guard";
+  } catch (error) {
+    console.warn("Legal Agent: LLM/GraphRAG unavailable; using deterministic legal fallback:", error);
   }
 
   const gateStatus = worstStatus(findings);
-  const isBlocking = gateStatus === "VIOLATION" || gateStatus === "BLOCKED" || gateStatus === "FAIL";
-
-  let summary = `Soát xét tuân thủ hoàn tất (AI Reasoning + GraphRAG). Trạng thái Gate: ${gateStatus}. `;
-  summary += findings.length === 0
-    ? "Không phát hiện ngoại lệ trong phạm vi các rule tự động đã chạy; kết quả này không phải xác nhận tuân thủ pháp lý toàn diện."
-    : findings.map(f => f.finding).join(" ");
-
+  const blocking = gateStatus === "VIOLATION" || gateStatus === "BLOCKED" || gateStatus === "FAIL";
   const traceResult: AgentTrace = {
     id: `trace-legal-${Date.now()}`,
     runId,
     agent: "legal",
     task: "Verify compliance and legal regulations",
-    status: isBlocking ? "blocked" : "completed",
-    summary,
-    toolCalls,
+    status: blocking ? "blocked" : "completed",
+    summary: findings.length
+      ? `Legal gate completed in ${reasoningMode}. Gate status: ${gateStatus}. ${findings.map(finding => finding.finding).join(" ")}`
+      : `Legal gate completed in ${reasoningMode}. No compliance blocker found in the P0 rule pack.`,
+    toolCalls: [
+      ...toolCalls,
+      {
+        toolName: "legalReasoningMode",
+        input: { hasInsuranceTyingSignal, creditFindingsCount: creditFindings.length },
+        output: { reasoningMode },
+        status: "success",
+        sideEffectLevel: "LOW",
+      },
+    ],
     findings,
     startedAt,
-    completedAt: new Date().toISOString()
+    completedAt: new Date().toISOString(),
   };
 
   await setCachedPolicy(cacheKey, JSON.stringify(traceResult));
-
   return traceResult;
+};
+
+export const runLegalAgent = async (
+  runId: string,
+  caseId: string,
+  prompt: string,
+  productFindings: DecisionEnvelope[],
+  creditFindings: DecisionEnvelope[]
+): Promise<AgentTrace> => {
+  const precheckTrace = await runLegalPrecheckAgent(runId, caseId);
+  return runLegalGateAgent(runId, caseId, prompt, productFindings, creditFindings, precheckTrace.findings ?? []);
 };

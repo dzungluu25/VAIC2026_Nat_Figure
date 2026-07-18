@@ -63,7 +63,7 @@ export const orchestratePromptStream = async (req: AuthenticatedRequest, res: Re
 export const getRunTraces = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { runId } = req.params;
-    const run = getOrchestrationRun(runId);
+    const run = await getOrchestrationRun(runId);
     
     if (!run) {
       return res.status(404).json({ error: "Run not found" });

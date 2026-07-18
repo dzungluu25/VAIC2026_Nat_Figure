@@ -35,6 +35,7 @@ export interface ToolCallTrace {
   input: Record<string, unknown>;
   output: Record<string, unknown>;
   status: "success" | "failed";
+  sideEffectLevel?: "LOW" | "MEDIUM" | "HIGH";
 }
 
 export interface AgentTrace {

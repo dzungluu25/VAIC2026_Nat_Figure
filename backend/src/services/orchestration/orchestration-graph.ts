@@ -5,7 +5,7 @@ import { ConditionPrecedent } from "../../types/agent.types";
 import { runCustomerProfileAgent } from "../agents/customer-profile.agent";
 import { runProductPolicyAgent } from "../agents/product-policy.agent";
 import { runCreditAgent } from "../agents/credit.agent";
-import { runLegalAgent } from "../agents/legal.agent";
+import { runLegalGateAgent, runLegalPrecheckAgent } from "../agents/legal.agent";
 import { runOperationsAgent } from "../agents/operations.agent";
 import { decideNextAction } from "./decision-matrix.service";
 import { recordAuditEvent } from "../governance/audit-log.service";
@@ -69,6 +69,7 @@ export const OrchestrationAnnotation = Annotation.Root({
   profileTrace: Annotation<AgentTrace | undefined>({ default: () => undefined, reducer: (_prev, next) => next }),
   productTrace: Annotation<AgentTrace | undefined>({ default: () => undefined, reducer: (_prev, next) => next }),
   creditTrace: Annotation<AgentTrace | undefined>({ default: () => undefined, reducer: (_prev, next) => next }),
+  legalPrecheckTrace: Annotation<AgentTrace | undefined>({ default: () => undefined, reducer: (_prev, next) => next }),
   legalTrace: Annotation<AgentTrace | undefined>({ default: () => undefined, reducer: (_prev, next) => next }),
   selfCorrectionTrace: Annotation<AgentTrace | undefined>({ default: () => undefined, reducer: (_prev, next) => next }),
   riskTrace: Annotation<AgentTrace | undefined>({ default: () => undefined, reducer: (_prev, next) => next }),
@@ -150,6 +151,21 @@ const creditNode = async (state: OrchestrationState): Promise<Partial<Orchestrat
   return { creditTrace: trace, modelCallsCount: 1 };
 };
 
+const specialistParallelNode = async (state: OrchestrationState): Promise<Partial<OrchestrationState>> => {
+  const [productTrace, creditTrace, legalPrecheckTrace] = await Promise.all([
+    runProductPolicyAgent(state.runId, state.caseId, false),
+    runCreditAgent(state.runId, state.caseId),
+    state.riskTier === "COMPLEX" ? runLegalPrecheckAgent(state.runId, state.caseId) : Promise.resolve(undefined),
+  ]);
+
+  return {
+    productTrace,
+    creditTrace,
+    legalPrecheckTrace,
+    modelCallsCount: state.riskTier === "COMPLEX" ? 3 : 2,
+  };
+};
+
 const getCreditAssessment = (state: OrchestrationState): CreditAssessmentResult | undefined =>
   state.creditTrace?.toolCalls.find(call => call.toolName === "evaluateCreditRules")?.output as unknown as CreditAssessmentResult | undefined;
 
@@ -191,12 +207,13 @@ const autoPolicyNode = async (state: OrchestrationState): Promise<Partial<Orches
 };
 
 const legalNode = async (state: OrchestrationState): Promise<Partial<OrchestrationState>> => {
-  const trace = await runLegalAgent(
+  const trace = await runLegalGateAgent(
     state.runId,
     state.caseId,
     state.prompt,
     state.productTrace?.findings || [],
-    state.creditTrace?.findings || []
+    state.creditTrace?.findings || [],
+    state.legalPrecheckTrace?.findings || []
   );
   return { legalTrace: trace, modelCallsCount: 1 };
 };
@@ -224,12 +241,13 @@ const selfCorrectionNode = async (state: OrchestrationState): Promise<Partial<Or
   };
 
   const productTrace = await runProductPolicyAgent(state.runId, state.caseId, true);
-  const legalTrace = await runLegalAgent(
+  const legalTrace = await runLegalGateAgent(
     state.runId,
     state.caseId,
     state.prompt,
     productTrace.findings || [],
-    state.creditTrace?.findings || []
+    state.creditTrace?.findings || [],
+    state.legalPrecheckTrace?.findings || []
   );
 
   return { selfCorrectionTrace, productTrace, legalTrace, modelCallsCount: 2 };
@@ -329,8 +347,7 @@ const hasInsuranceTyingViolation = (state: OrchestrationState): boolean =>
 const builder = new StateGraph(OrchestrationAnnotation)
   .addNode("classify", classifyNode)
   .addNode("profile", profileNode)
-  .addNode("product", productNode)
-  .addNode("credit", creditNode)
+  .addNode("specialistParallel", specialistParallelNode)
   .addNode("autoPolicy", autoPolicyNode)
   .addNode("legal", legalNode)
   .addNode("selfCorrection", selfCorrectionNode)
@@ -341,9 +358,8 @@ const builder = new StateGraph(OrchestrationAnnotation)
     blocked: END,
     continue: "profile",
   })
-  .addEdge("profile", "product")
-  .addEdge("product", "credit")
-  .addConditionalEdges("credit", state => (state.riskTier === "FAST" ? "fast" : "complex"), {
+  .addEdge("profile", "specialistParallel")
+  .addConditionalEdges("specialistParallel", state => (state.riskTier === "FAST" ? "fast" : "complex"), {
     fast: "autoPolicy",
     complex: "legal",
   })
@@ -376,6 +392,7 @@ export const assembleTraces = (state: OrchestrationState): AgentTrace[] =>
   [
     state.plannerTrace,
     state.profileTrace,
+    state.legalPrecheckTrace,
     state.productTrace,
     state.creditTrace,
     state.legalTrace,

@@ -62,9 +62,13 @@ export const maskPiiPayload = (payload: any): any => {
           masked[key] = maskEmail(value);
         } else if (lowerKey === "name" || lowerKey === "fullname" || lowerKey === "customername") {
           masked[key] = maskName(value);
+        } else if (lowerKey === "customerid" || lowerKey === "accountnumber" || lowerKey === "accountno" || lowerKey === "ciccode") {
+          masked[key] = value.length <= 4 ? "***" : `${value.slice(0, 2)}${"*".repeat(Math.max(3, value.length - 4))}${value.slice(-2)}`;
+        } else if (lowerKey === "summary" || lowerKey === "details" || lowerKey === "finding" || lowerKey === "finalanswer") {
+          masked[key] = maskPiiText(value);
         } else {
           // Check for prompt injections in generic text
-          masked[key] = value;
+          masked[key] = maskPiiText(value);
         }
       } else {
         masked[key] = maskPiiPayload(value);

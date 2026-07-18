@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { ReactFlow, Background, type Edge } from "@xyflow/react";
+import { Background, ReactFlow, type Edge } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { Card } from "../../components/Card";
 import { AgentNode, type AgentFlowNode, type GraphNodeStatus } from "./AgentNode";
@@ -7,70 +7,77 @@ import { useOrchestrationStore, type PipelineStep } from "../../store/orchestrat
 import type { StepKey } from "../../utils/parseAgentState";
 import styles from "./OrchestrationGraph.module.css";
 
-// Static positions mirroring the real topology in
-// backend/src/services/orchestration/orchestration-graph.ts — this is not a decorative
-// diagram, it's the actual compiled StateGraph (classify -> profile -> product -> fast/complex
-// split -> ... -> operations), so the highlighted path always matches what really ran.
+// Mirrors backend/src/services/orchestration/orchestration-graph.ts:
+// classify -> profile -> parallel specialist stage -> legal gate -> risk -> operations.
 const NODE_LAYOUT: { id: string; stepKey?: StepKey; label: string; x: number; y: number }[] = [
-  { id: "classify", stepKey: "planner", label: "Planner (classify)", x: 300, y: 0 },
-  { id: "profile", stepKey: "profile", label: "Customer Profile", x: 300, y: 80 },
-  { id: "product", stepKey: "product", label: "Product & Policy", x: 300, y: 160 },
-  { id: "markFastPass", label: "Fast Pass", x: 80, y: 260 },
-  { id: "credit", stepKey: "credit", label: "Credit Risk", x: 500, y: 260 },
-  { id: "legal", stepKey: "legal", label: "Legal & Compliance", x: 500, y: 340 },
-  { id: "selfCorrection", stepKey: "self-correction", label: "Self-Correction Loop", x: 700, y: 420 },
-  { id: "risk", stepKey: "risk", label: "Risk Consolidation", x: 500, y: 420 },
-  { id: "operations", stepKey: "operations", label: "Operations", x: 300, y: 500 },
+  { id: "classify", stepKey: "planner", label: "Planner", x: 360, y: 0 },
+  { id: "profile", stepKey: "profile", label: "Customer Profile", x: 360, y: 90 },
+  { id: "product", stepKey: "product", label: "Product Policy", x: 90, y: 220 },
+  { id: "credit", stepKey: "credit", label: "Credit Assessment", x: 360, y: 220 },
+  { id: "legalPrecheck", stepKey: "legal-precheck", label: "Legal Precheck", x: 630, y: 220 },
+  { id: "markFastPass", label: "Fast Pass", x: 90, y: 360 },
+  { id: "legal", stepKey: "legal", label: "Legal Gate", x: 500, y: 360 },
+  { id: "selfCorrection", stepKey: "self-correction", label: "Self-Correction", x: 730, y: 460 },
+  { id: "risk", stepKey: "risk", label: "Risk Matrix", x: 500, y: 460 },
+  { id: "operations", stepKey: "operations", label: "Operations", x: 360, y: 580 },
 ];
 
-const findStep = (steps: PipelineStep[], key?: StepKey) => (key ? steps.find(s => s.key === key) : undefined);
+const findStep = (steps: PipelineStep[], key?: StepKey) => (key ? steps.find(step => step.key === key) : undefined);
 
 export const OrchestrationGraph = () => {
-  const steps = useOrchestrationStore(s => s.steps);
-  const riskTier = useOrchestrationStore(s => s.riskTier);
-  const phase = useOrchestrationStore(s => s.phase);
+  const steps = useOrchestrationStore(state => state.steps);
+  const riskTier = useOrchestrationStore(state => state.riskTier);
+  const phase = useOrchestrationStore(state => state.phase);
 
-  const hasSelfCorrection = steps.some(s => s.key === "self-correction");
+  const hasSelfCorrection = steps.some(step => step.key === "self-correction");
   const opsStep = findStep(steps, "operations");
   const productStep = findStep(steps, "product");
+  const creditStep = findStep(steps, "credit");
 
   const nodes: AgentFlowNode[] = useMemo(() => {
-    return NODE_LAYOUT.filter(n => n.id !== "selfCorrection" || hasSelfCorrection).map(n => {
-      let status: GraphNodeStatus;
-      if (n.id === "markFastPass") {
-        if (riskTier === "COMPLEX") status = "inactive";
-        else if (riskTier === undefined) status = phase === "idle" ? "inactive" : "pending";
-        else if (opsStep && opsStep.status !== "pending") status = "done";
-        else if (productStep?.status === "done") status = "in_progress";
-        else status = "pending";
-      } else if (["credit", "legal", "risk", "selfCorrection"].includes(n.id) && riskTier === "FAST") {
-        status = "inactive";
-      } else {
-        const step = findStep(steps, n.stepKey);
-        if (!step) status = phase === "idle" ? "inactive" : "pending";
-        else if (step.status === "skipped") status = "inactive";
-        else status = step.status === "pending" ? "pending" : step.status === "in_progress" ? "in_progress" : "done";
-      }
+    return NODE_LAYOUT
+      .filter(node => node.id !== "selfCorrection" || hasSelfCorrection)
+      .map(node => {
+        let status: GraphNodeStatus;
 
-      return {
-        id: n.id,
-        type: "agentNode",
-        position: { x: n.x, y: n.y },
-        data: { label: n.label, status },
-        draggable: false,
-        selectable: false,
-      };
-    });
-  }, [steps, riskTier, phase, opsStep, productStep, hasSelfCorrection]);
+        if (node.id === "markFastPass") {
+          if (riskTier === "COMPLEX") status = "inactive";
+          else if (riskTier === undefined) status = phase === "idle" ? "inactive" : "pending";
+          else if (opsStep && opsStep.status !== "pending") status = "done";
+          else if (productStep?.status === "done" && creditStep?.status === "done") status = "in_progress";
+          else status = "pending";
+        } else if (["legalPrecheck", "legal", "risk", "selfCorrection"].includes(node.id) && riskTier === "FAST") {
+          status = "inactive";
+        } else {
+          const step = findStep(steps, node.stepKey);
+          if (!step) status = phase === "idle" ? "inactive" : "pending";
+          else if (step.status === "skipped") status = "inactive";
+          else status = step.status === "pending" ? "pending" : step.status === "in_progress" ? "in_progress" : "done";
+        }
+
+        return {
+          id: node.id,
+          type: "agentNode",
+          position: { x: node.x, y: node.y },
+          data: { label: node.label, status },
+          draggable: false,
+          selectable: false,
+        };
+      });
+  }, [steps, riskTier, phase, opsStep, productStep, creditStep, hasSelfCorrection]);
 
   const edges: Edge[] = useMemo(() => {
     const base: Edge[] = [
       { id: "e-classify-profile", source: "classify", target: "profile" },
       { id: "e-profile-product", source: "profile", target: "product" },
+      { id: "e-profile-credit", source: "profile", target: "credit" },
+      { id: "e-profile-legalprecheck", source: "profile", target: "legalPrecheck" },
       { id: "e-product-fast", source: "product", target: "markFastPass" },
-      { id: "e-product-credit", source: "product", target: "credit" },
+      { id: "e-credit-fast", source: "credit", target: "markFastPass" },
       { id: "e-fast-ops", source: "markFastPass", target: "operations" },
+      { id: "e-product-legal", source: "product", target: "legal" },
       { id: "e-credit-legal", source: "credit", target: "legal" },
+      { id: "e-legalprecheck-legal", source: "legalPrecheck", target: "legal" },
       { id: "e-risk-ops", source: "risk", target: "operations" },
     ];
 
@@ -85,13 +92,13 @@ export const OrchestrationGraph = () => {
 
     return base.map(edge => ({
       ...edge,
-      animated: nodes.find(n => n.id === edge.source)?.data.status === "in_progress",
+      animated: nodes.find(node => node.id === edge.source)?.data.status === "in_progress",
       style: { stroke: "var(--color-border)", strokeWidth: 1.5 },
     }));
   }, [hasSelfCorrection, nodes]);
 
   return (
-    <Card title="Sơ đồ điều phối (LangGraph StateGraph)">
+    <Card title="Agent Dependency Graph">
       <div className={styles.canvas}>
         <ReactFlow
           nodes={nodes}

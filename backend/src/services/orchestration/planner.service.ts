@@ -20,6 +20,7 @@ const TRACE_KEYS = [
   "selfCorrectionTrace",
   "productTrace",
   "creditTrace",
+  "legalPrecheckTrace",
   "legalTrace",
   "riskTrace",
   "opsTrace",
@@ -57,7 +58,7 @@ const buildOrchestrationResponse = async (
       auditEvents: await getAuditEventsByRun(runId),
       transparency: transparentAnswer.transparency,
     };
-    saveOrchestrationRun(runId, response);
+    await saveOrchestrationRun(runId, response);
     return response;
   }
 
@@ -93,7 +94,10 @@ const buildOrchestrationResponse = async (
 
   // Cost budget calculation
   const missingConsent = !retailCase.consent.credit_check || !retailCase.consent.tax_income_check;
-  const highWritesBeforeApproval = (finalDecision === "CONDITIONAL_PASS" || finalDecision === "PASS") && !approvalToken;
+  const highWritesBeforeApproval = !approvalToken && rawTraces.some(trace =>
+    trace.agent === "operations" &&
+    trace.toolCalls.some(call => call.sideEffectLevel === "HIGH" && call.status === "success")
+  );
 
   const budgetStatus: CostBudgetStatus = {
     piiMasked: true,
@@ -120,7 +124,7 @@ const buildOrchestrationResponse = async (
     transparency: transparentAnswer.transparency
   };
 
-  saveOrchestrationRun(runId, response);
+  await saveOrchestrationRun(runId, response);
   return response;
 };
 
