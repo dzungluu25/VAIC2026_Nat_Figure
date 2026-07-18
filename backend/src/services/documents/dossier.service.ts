@@ -1,13 +1,17 @@
 import { randomUUID } from "crypto";
 import { pgPool, pgQuery } from "../../config/pg";
 import { getPublishedChecklist } from "./document-checklist.service";
-import { DossierCicReport, DossierDocument, DossierStatus, LoanDossier, LoanType } from "../../types/document-intake.types";
+import { AuthorizationContext } from "../../config/authorization";
+import { buildDossierScopePredicate } from "../auth/authorization.service";
+import { CustomerDossierSummary, DossierCicReport, DossierDocument, DossierStatus, LoanDossier, LoanType } from "../../types/document-intake.types";
 
 const toDossier = (row: any): LoanDossier => ({
   dossierId: row.dossier_id,
   tenantId: row.tenant_id,
   customerId: row.customer_id,
   customerEmail: row.customer_email,
+  branchId: row.branch_id,
+  teamId: row.team_id,
   caseId: row.case_id,
   runId: row.run_id ?? null,
   loanType: row.loan_type,
@@ -31,17 +35,25 @@ const toDocument = (row: any): DossierDocument => ({
 });
 
 /** Creates a dossier against whatever checklist version is currently published for the loan type — fails closed if none is published yet. */
-export const createDossier = async (tenantId: string, customerId: string, customerEmail: string, loanType: LoanType, actor: string): Promise<LoanDossier> => {
+export const createDossier = async (
+  tenantId: string,
+  customerId: string,
+  customerEmail: string,
+  loanType: LoanType,
+  actor: string,
+  branchId: string | null,
+  teamId: string | null
+): Promise<LoanDossier> => {
   const checklist = await getPublishedChecklist(tenantId, loanType);
   if (!checklist) throw new Error("CHECKLIST_NOT_PUBLISHED");
   const dossierId = `dossier-${randomUUID()}`;
   const now = new Date().toISOString();
   await pgQuery(
-    `INSERT INTO loan_dossiers (dossier_id,tenant_id,customer_id,customer_email,case_id,loan_type,checklist_version,status,created_by,created_at,updated_at)
-     VALUES ($1,$2,$3,$4,NULL,$5,$6,'COLLECTING',$7,$8,$8)`,
-    [dossierId, tenantId, customerId, customerEmail, loanType, checklist.version, actor, now]
+    `INSERT INTO loan_dossiers (dossier_id,tenant_id,customer_id,customer_email,branch_id,team_id,case_id,loan_type,checklist_version,status,created_by,created_at,updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,NULL,$7,$8,'COLLECTING',$9,$10,$10)`,
+    [dossierId, tenantId, customerId, customerEmail, branchId, teamId, loanType, checklist.version, actor, now]
   );
-  return { dossierId, tenantId, customerId, customerEmail, caseId: null, loanType, checklistVersion: checklist.version, status: "COLLECTING", createdBy: actor, createdAt: now, updatedAt: now };
+  return { dossierId, tenantId, customerId, customerEmail, branchId, teamId, caseId: null, loanType, checklistVersion: checklist.version, status: "COLLECTING", createdBy: actor, createdAt: now, updatedAt: now };
 };
 
 /**
@@ -102,6 +114,16 @@ export const saveRunAsDossier = async (tenantId: string, runId: string, actor: s
 
 export const getDossier = async (tenantId: string, dossierId: string): Promise<LoanDossier | null> => {
   const result = await pgQuery(`SELECT * FROM loan_dossiers WHERE tenant_id=$1 AND dossier_id=$2`, [tenantId, dossierId]);
+  return result.rows[0] ? toDossier(result.rows[0]) : null;
+};
+
+/** Single-record equivalent of list scoping; controllers must use this instead of tenant-only lookup. */
+export const getScopedDossier = async (context: AuthorizationContext, dossierId: string): Promise<LoanDossier | null> => {
+  const scope = buildDossierScopePredicate(context, "d", 3);
+  const result = await pgQuery(
+    `SELECT d.* FROM loan_dossiers d WHERE d.tenant_id=$1 AND d.dossier_id=$2 AND (${scope.sql})`,
+    [context.tenantId, dossierId, ...scope.params]
+  );
   return result.rows[0] ? toDossier(result.rows[0]) : null;
 };
 
@@ -169,23 +191,50 @@ export const transitionDossierStatus = async (
 export interface ListDossiersFilter {
   status?: DossierStatus;
   loanType?: LoanType;
-  assignedTo?: string;
+  assignedToCurrentUser?: boolean;
 }
 
-export const listDossiers = async (tenantId: string, filter: ListDossiersFilter): Promise<LoanDossier[]> => {
+const CUSTOMER_STATUS: Record<DossierStatus, { status: CustomerDossierSummary["status"]; statusLabel: string }> = {
+  COLLECTING: { status: "THIEU_GIAY_TO", statusLabel: "Thiếu giấy tờ" },
+  INCOMPLETE: { status: "THIEU_GIAY_TO", statusLabel: "Thiếu giấy tờ" },
+  NEEDS_MORE_INFO: { status: "THIEU_GIAY_TO", statusLabel: "Thiếu giấy tờ" },
+  COMPLETE: { status: "DANG_XU_LY", statusLabel: "Đang xử lý" },
+  PENDING_CIC: { status: "DANG_XU_LY", statusLabel: "Đang xử lý" },
+  QUEUED_FOR_SCORING: { status: "DANG_XU_LY", statusLabel: "Đang xử lý" },
+  SCORED: { status: "DANG_XU_LY", statusLabel: "Đang xử lý" },
+  PENDING_REVIEW: { status: "CHO_DUYET", statusLabel: "Chờ duyệt" },
+  APPROVED: { status: "DA_DUYET", statusLabel: "Đã duyệt" },
+  REJECTED: { status: "TU_CHOI", statusLabel: "Từ chối" },
+};
+
+export const toCustomerDossierSummary = (dossier: Pick<LoanDossier, "dossierId" | "status">): CustomerDossierSummary => ({
+  dossierId: dossier.dossierId,
+  ...CUSTOMER_STATUS[dossier.status],
+});
+
+export const listDossiers = async (
+  context: AuthorizationContext,
+  filter: ListDossiersFilter
+): Promise<Array<LoanDossier | CustomerDossierSummary>> => {
   const conditions = ["d.tenant_id=$1"];
-  const params: unknown[] = [tenantId];
+  const params: unknown[] = [context.tenantId];
+  const scope = buildDossierScopePredicate(context, "d", 2);
+  params.push(...scope.params);
+  conditions.push(`(${scope.sql})`);
   if (filter.status) { params.push(filter.status); conditions.push(`d.status=$${params.length}`); }
   if (filter.loanType) { params.push(filter.loanType); conditions.push(`d.loan_type=$${params.length}`); }
   let join = "";
-  if (filter.assignedTo) {
+  if (filter.assignedToCurrentUser) {
     join = "JOIN dossier_review_assignments a ON a.dossier_id=d.dossier_id AND a.tenant_id=d.tenant_id";
-    params.push(filter.assignedTo);
+    params.push(context.userId);
     conditions.push(`a.assigned_officer=$${params.length}`);
   }
+  const select = context.role === "CUSTOMER" ? "d.dossier_id,d.status" : "d.*";
   const result = await pgQuery(
-    `SELECT d.* FROM loan_dossiers d ${join} WHERE ${conditions.join(" AND ")} ORDER BY d.updated_at DESC`,
+    `SELECT ${select} FROM loan_dossiers d ${join} WHERE ${conditions.join(" AND ")} ORDER BY d.updated_at DESC`,
     params
   );
-  return result.rows.map(toDossier);
+  return context.role === "CUSTOMER"
+    ? result.rows.map(row => toCustomerDossierSummary({ dossierId: row.dossier_id, status: row.status }))
+    : result.rows.map(toDossier);
 };

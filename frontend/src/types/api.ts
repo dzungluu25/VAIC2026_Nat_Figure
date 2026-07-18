@@ -170,7 +170,7 @@ export type OrchestrationStreamEvent =
     | { type: "advisory_final"; response: AdvisoryResponse }
     | { type: "error"; message: string; code?: string; questions?: string[] };
 
-  export type UserRole = "CREDIT_OFFICER" | "CREDIT_APPROVER";
+  export type UserRole = "CUSTOMER" | "CREDIT_OFFICER" | "CREDIT_APPROVER" | "ADMIN" | "AUDITOR";
 
   export interface AuthUser {
     sub: string;

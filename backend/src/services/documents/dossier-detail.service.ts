@@ -1,5 +1,6 @@
 import { pgQuery } from "../../config/pg";
-import { getAllDossierDocuments, getDossier, getLatestCicReport } from "./dossier.service";
+import { AuthorizationContext } from "../../config/authorization";
+import { getAllDossierDocuments, getLatestCicReport, getScopedDossier, toCustomerDossierSummary } from "./dossier.service";
 import { getLatestOcrResult } from "./ocr-extraction.service";
 import { evaluateDossierCompleteness } from "./checklist-completeness.service";
 import { listReviewDecisions } from "./review-decision.service";
@@ -10,9 +11,14 @@ export interface DossierDocumentWithOcr extends DossierDocument {
 }
 
 /** Task 6 detail view: every document (full upload history, not just latest-per-type) with its OCR fields, the checklist gap, preliminary score, and who it's assigned to — everything a reviewer needs on one screen. */
-export const getDossierDetail = async (tenantId: string, dossierId: string) => {
-  const dossier = await getDossier(tenantId, dossierId);
+export const getDossierDetail = async (context: AuthorizationContext, dossierId: string) => {
+  const dossier = await getScopedDossier(context, dossierId);
   if (!dossier) return null;
+
+  // Return before any document/CIC/scoring query so customer responses cannot leak hidden fields indirectly.
+  if (context.role === "CUSTOMER") return toCustomerDossierSummary(dossier);
+
+  const tenantId = context.tenantId;
 
   const documents = await getAllDossierDocuments(tenantId, dossierId);
   const documentsWithOcr: DossierDocumentWithOcr[] = await Promise.all(

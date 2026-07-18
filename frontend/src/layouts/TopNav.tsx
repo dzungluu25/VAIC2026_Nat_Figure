@@ -1,16 +1,21 @@
-import { Activity, ArrowUpRight, BrainCircuit, ChartNoAxesCombined, ClipboardList, House, SlidersHorizontal, Sparkles } from "lucide-react";
+import { Activity, ArrowUpRight, BrainCircuit, ChartNoAxesCombined, ClipboardList, LogOut, SlidersHorizontal, Sparkles } from "lucide-react";
 import { Link, NavLink } from "react-router-dom";
+import { useSessionStore } from "../store/sessionStore";
+import type { UserRole } from "../types/api";
 import styles from "./TopNav.module.css";
 
-const NAV_ITEMS = [
-  { to: "/workspace", label: "Thẩm định", icon: Sparkles },
-  { to: "/dossiers", label: "Hồ sơ chờ duyệt", icon: ClipboardList },
-  { to: "/agents", label: "Agent flow", icon: BrainCircuit },
-  { to: "/policy", label: "Chính sách", icon: SlidersHorizontal },
-  { to: "/metrics", label: "Hiệu năng", icon: ChartNoAxesCombined },
+const NAV_ITEMS: Array<{ to: string; label: string; icon: typeof Sparkles; roles: UserRole[] }> = [
+  { to: "/workspace", label: "Thẩm định", icon: Sparkles, roles: ["CREDIT_OFFICER", "CREDIT_APPROVER"] },
+  { to: "/dossiers", label: "Hồ sơ chờ duyệt", icon: ClipboardList, roles: ["CUSTOMER", "CREDIT_OFFICER", "CREDIT_APPROVER", "ADMIN", "AUDITOR"] },
+  { to: "/agents", label: "Agent flow", icon: BrainCircuit, roles: ["CREDIT_OFFICER", "CREDIT_APPROVER"] },
+  { to: "/policy", label: "Chính sách", icon: SlidersHorizontal, roles: ["CREDIT_APPROVER"] },
+  { to: "/metrics", label: "Hiệu năng", icon: ChartNoAxesCombined, roles: ["CREDIT_OFFICER", "CREDIT_APPROVER", "ADMIN", "AUDITOR"] },
 ];
 
-export const TopNav = () => (
+export const TopNav = () => {
+  const { role, clearSession } = useSessionStore();
+  const visibleItems = role ? NAV_ITEMS.filter(item => item.roles.includes(role)) : NAV_ITEMS;
+  return (
   <header className={styles.header}>
     <div className={styles.inner}>
       <Link to="/" className={styles.brand} aria-label="Về trang chủ">
@@ -22,7 +27,7 @@ export const TopNav = () => (
       </Link>
 
       <nav className={styles.nav} aria-label="Điều hướng chính">
-        {NAV_ITEMS.map(item => (
+        {visibleItems.map(item => (
           <NavLink
             key={item.to}
             to={item.to}
@@ -34,11 +39,12 @@ export const TopNav = () => (
         ))}
       </nav>
 
-      <Link to="/" className={styles.homeLink}>
-        <House size={15} />
-        <span>Giới thiệu</span>
+      <Link to="/login" onClick={clearSession} className={styles.homeLink}>
+        <LogOut size={15} />
+        <span>Đăng xuất</span>
         <ArrowUpRight size={14} />
       </Link>
     </div>
   </header>
-);
+  );
+};

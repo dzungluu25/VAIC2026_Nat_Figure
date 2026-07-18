@@ -8,7 +8,8 @@
     "dev": "nodemon src/server.ts",
     "build": "tsc",
     "test": "ts-node src/test-core.ts && ts-node src/test-platform.ts && ts-node src/test-langgraph-integrity.ts",
-    "test:integrity": "ts-node src/test-langgraph-integrity.ts"
+    "test:integrity": "ts-node src/test-langgraph-integrity.ts",
+    "test:authorization": "ts-node src/test-authorization.ts"
   },
   "dependencies": {
     "@langchain/core": "^1.2.3",

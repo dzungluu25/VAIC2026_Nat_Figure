@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { createJSONStorage, persist } from "zustand/middleware";
 import type { UserRole } from "../types/api";
 
 interface Session {
@@ -12,7 +13,15 @@ interface SessionStoreState extends Partial<Session> {
   clearSession: () => void;
 }
 
-export const useSessionStore = create<SessionStoreState>()(set => ({
-  setSession: session => set(session),
-  clearSession: () => set({ accessToken: undefined, role: undefined, tenantId: undefined }),
-}));
+export const useSessionStore = create<SessionStoreState>()(
+  persist(
+    set => ({
+      setSession: session => set(session),
+      clearSession: () => set({ accessToken: undefined, role: undefined, tenantId: undefined }),
+    }),
+    {
+      name: "vaic-auth-session",
+      storage: createJSONStorage(() => sessionStorage),
+    }
+  )
+);

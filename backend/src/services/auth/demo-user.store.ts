@@ -27,6 +27,9 @@ const buildUser = (username: string, role: UserRole, password: string): DemoUser
   return { username, role, passwordHash: `${salt}:${hashPassword(password, salt)}` };
 };
 
+const buildOptionalUser = (username: string, role: UserRole, password: string): DemoUser | null =>
+  password ? buildUser(username, role, password) : null;
+
 let demoUsers: DemoUser[] | null = null;
 
 const getDemoUsers = (): DemoUser[] => {
@@ -34,7 +37,10 @@ const getDemoUsers = (): DemoUser[] => {
     demoUsers = [
       buildUser("officer.tam", "CREDIT_OFFICER", config.demoOfficerPassword),
       buildUser("approver.lan", "CREDIT_APPROVER", config.demoApproverPassword),
-    ];
+      buildOptionalUser("customer.demo", "CUSTOMER", config.demoCustomerPassword),
+      buildOptionalUser("admin.demo", "ADMIN", config.demoAdminPassword),
+      buildOptionalUser("auditor.demo", "AUDITOR", config.demoAuditorPassword),
+    ].filter((user): user is DemoUser => user !== null);
   }
   return demoUsers;
 };

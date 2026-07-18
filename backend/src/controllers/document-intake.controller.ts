@@ -1,11 +1,13 @@
 import { Response } from "express";
 import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { createChecklistVersion, getPublishedChecklist, listChecklistVersions, publishChecklistVersion } from "../services/documents/document-checklist.service";
-import { createDossier, listDossiers, ListDossiersFilter } from "../services/documents/dossier.service";
+import { createDossier, getScopedDossier, listDossiers, ListDossiersFilter, toCustomerDossierSummary } from "../services/documents/dossier.service";
 import { uploadDocument } from "../services/documents/document-upload.service";
 import { getDossierDetail } from "../services/documents/dossier-detail.service";
 import { submitReviewDecision } from "../services/documents/review-decision.service";
 import { submitCicReport } from "../services/documents/cic-report.service";
+import { reassignDossier } from "../services/documents/dossier-reassignment.service";
+import { getAuditEventsByRun } from "../services/governance/audit-log.service";
 import { ChecklistDocumentType, DossierStatus, LoanType, ReviewDecision } from "../types/document-intake.types";
 
 const fail = (res: Response, error: unknown) => {
@@ -66,10 +68,20 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const createDossierHandler = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { customerId, customerEmail, loanType } = req.body as { customerId: unknown; customerEmail: unknown; loanType: unknown };
-    if (typeof customerId !== "string" || !customerId.trim()) return res.status(400).json({ error: "CUSTOMER_ID_REQUIRED" });
+    const effectiveCustomerId = req.user!.role === "CUSTOMER" ? req.user!.customerId : customerId;
+    if (typeof effectiveCustomerId !== "string" || !effectiveCustomerId.trim()) return res.status(400).json({ error: "CUSTOMER_ID_REQUIRED" });
     if (typeof customerEmail !== "string" || !EMAIL_PATTERN.test(customerEmail)) return res.status(400).json({ error: "VALID_CUSTOMER_EMAIL_REQUIRED" });
     if (!isLoanType(loanType)) return res.status(400).json({ error: "INVALID_LOAN_TYPE" });
-    return res.status(201).json(await createDossier(req.user!.tenantId, customerId, customerEmail, loanType, req.user!.sub));
+    const dossier = await createDossier(
+      req.user!.tenantId,
+      effectiveCustomerId,
+      customerEmail,
+      loanType,
+      req.user!.userId,
+      req.user!.branchId,
+      req.user!.teamId
+    );
+    return res.status(201).json(req.user!.role === "CUSTOMER" ? toCustomerDossierSummary(dossier) : dossier);
   } catch (e) {
     return fail(res, e);
   }
@@ -84,14 +96,16 @@ const isDossierStatus = (value: unknown): value is DossierStatus => typeof value
 /** Task 6 list page: filter by status/loan type; assignedTo=me restricts to the caller's own queue. */
 export const listDossiersHandler = async (req: AuthenticatedRequest, res: Response) => {
   const filter: ListDossiersFilter = {};
-  if (isDossierStatus(req.query.status)) filter.status = req.query.status;
-  if (isLoanType(req.query.loanType)) filter.loanType = req.query.loanType;
-  if (req.query.assignedTo === "me") filter.assignedTo = req.user!.sub;
-  return res.json({ dossiers: await listDossiers(req.user!.tenantId, filter) });
+  if (req.user!.role !== "CUSTOMER") {
+    if (isDossierStatus(req.query.status)) filter.status = req.query.status;
+    if (isLoanType(req.query.loanType)) filter.loanType = req.query.loanType;
+    if (req.query.assignedTo === "me") filter.assignedToCurrentUser = true;
+  }
+  return res.json({ dossiers: await listDossiers(req.user!, filter) });
 };
 
 export const getDossierHandler = async (req: AuthenticatedRequest, res: Response) => {
-  const detail = await getDossierDetail(req.user!.tenantId, req.params.id);
+  const detail = await getDossierDetail(req.user!, req.params.id);
   if (!detail) return res.status(404).json({ error: "DOSSIER_NOT_FOUND" });
   return res.json(detail);
 };
@@ -106,10 +120,8 @@ export const reviewDecisionHandler = async (req: AuthenticatedRequest, res: Resp
       return res.status(400).json({ error: "INVALID_REVIEW_DECISION" });
     }
     const result = await submitReviewDecision(
-      req.user!.tenantId,
+      req.user!,
       req.params.id,
-      req.user!.sub,
-      req.user!.role,
       decision as ReviewDecision,
       typeof comment === "string" ? comment : undefined
     );
@@ -126,15 +138,15 @@ export const uploadDocumentHandler = async (req: AuthenticatedRequest, res: Resp
     const documentType = req.body.documentType;
     if (typeof documentType !== "string" || !documentType.trim()) return res.status(400).json({ error: "DOCUMENT_TYPE_REQUIRED" });
     const result = await uploadDocument(
-      req.user!.tenantId,
+      req.user!,
       req.params.id,
       documentType,
-      { buffer: file.buffer, originalFilename: file.originalname, mimeType: file.mimetype },
-      req.user!.sub
+      { buffer: file.buffer, originalFilename: file.originalname, mimeType: file.mimetype }
     );
     // The file was stored either way (kept for evidence/audit); a form mismatch is reported as a
     // rejection rather than a plain success so the client can't miss it (task 2: "từ chối ngay, trả lỗi rõ ràng").
-    return res.status(result.formResult.passed ? 201 : 422).json(result);
+    const response = req.user!.role === "CUSTOMER" ? await getDossierDetail(req.user!, req.params.id) : result;
+    return res.status(result.formResult.passed ? 201 : 422).json(response);
   } catch (e) {
     return fail(res, e);
   }
@@ -155,17 +167,32 @@ export const submitCicReportHandler = async (req: AuthenticatedRequest, res: Res
     }
     const file = (req as AuthenticatedRequest & { file?: Express.Multer.File }).file;
     const result = await submitCicReport(
-      req.user!.tenantId,
+      req.user!,
       req.params.id,
       {
         creditScore, totalOutstandingDebt, debtGroup, reportDate,
         notes: typeof notes === "string" ? notes : undefined,
         file: file ? { buffer: file.buffer, originalFilename: file.originalname, mimeType: file.mimetype } : undefined,
-      },
-      req.user!.sub
+      }
     );
     return res.status(201).json(result);
   } catch (e) {
     return fail(res, e);
   }
+};
+
+export const reassignDossierHandler = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const targetOfficerId = req.body?.targetOfficerId;
+    if (!isNonEmptyString(targetOfficerId)) return res.status(400).json({ error: "TARGET_OFFICER_REQUIRED" });
+    return res.json(await reassignDossier(req.user!, req.params.id, targetOfficerId));
+  } catch (e) {
+    return fail(res, e);
+  }
+};
+
+export const getDossierAuditHandler = async (req: AuthenticatedRequest, res: Response) => {
+  const dossier = await getScopedDossier(req.user!, req.params.id);
+  if (!dossier) return res.status(404).json({ error: "DOSSIER_NOT_FOUND" });
+  return res.json({ events: await getAuditEventsByRun(dossier.dossierId) });
 };

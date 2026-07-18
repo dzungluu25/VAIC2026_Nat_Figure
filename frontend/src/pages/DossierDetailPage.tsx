@@ -6,18 +6,24 @@ import { Card } from "../components/Card";
 import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
 import { Skeleton } from "../components/Skeleton";
-import { getDemoAccessToken } from "../services/authService";
-import { getDossierDetail, submitCicReport, submitReviewDecision } from "../services/dossierService";
+import { getDossierDetail, reassignDossier, submitCicReport, submitReviewDecision } from "../services/dossierService";
+import { useSessionStore } from "../store/sessionStore";
 import { ApiError } from "../services/httpClient";
 import {
   documentStatusLabel, documentStatusTone, documentTypeLabel,
   dossierStatusLabel, dossierStatusTone, humanizeFieldKey, loanTypeLabel,
 } from "../features/dossier/dossierStatus";
-import type { DossierDetail, ReviewDecision } from "../types/document-intake";
+import { isCustomerDossierSummary, type DossierDetail, type ReviewDecision } from "../types/document-intake";
 import styles from "./DossierDetailPage.module.css";
 
 export const DossierDetailPage = () => {
   const { id } = useParams<{ id: string }>();
+  const { accessToken, role } = useSessionStore();
+  const activeRole = role ?? "CREDIT_OFFICER";
+  const getAccessToken = useCallback(() => {
+    if (!accessToken) throw new ApiError("AUTHENTICATION_REQUIRED", 401);
+    return Promise.resolve(accessToken);
+  }, [accessToken]);
   const [detail, setDetail] = useState<DossierDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -27,20 +33,22 @@ export const DossierDetailPage = () => {
   const [cicFile, setCicFile] = useState<File | null>(null);
   const [cicSubmitting, setCicSubmitting] = useState(false);
   const [cicError, setCicError] = useState<string | null>(null);
+  const [targetOfficerId, setTargetOfficerId] = useState("");
+  const [reassigning, setReassigning] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
     setError(null);
     try {
-      const token = await getDemoAccessToken();
+      const token = await getAccessToken();
       setDetail(await getDossierDetail(token, id));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Không tải được chi tiết hồ sơ.");
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [getAccessToken, id]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -49,7 +57,7 @@ export const DossierDetailPage = () => {
     setSubmitting(decision);
     setError(null);
     try {
-      const token = await getDemoAccessToken();
+      const token = await getAccessToken();
       await submitReviewDecision(token, id, decision, comment.trim() || undefined);
       setComment("");
       await load();
@@ -66,7 +74,7 @@ export const DossierDetailPage = () => {
     setCicSubmitting(true);
     setCicError(null);
     try {
-      const token = await getDemoAccessToken();
+      const token = await getAccessToken();
       await submitCicReport(token, id, { ...cicForm, notes: cicForm.notes.trim() || undefined, file: cicFile ?? undefined });
       setCicForm({ creditScore: "", totalOutstandingDebt: "", debtGroup: "", reportDate: "", notes: "" });
       setCicFile(null);
@@ -75,6 +83,21 @@ export const DossierDetailPage = () => {
       setCicError(err instanceof ApiError ? err.message : "Không thể lưu CIC.");
     } finally {
       setCicSubmitting(false);
+    }
+  };
+
+  const reassign = async () => {
+    if (!id || !targetOfficerId.trim()) return;
+    setReassigning(true);
+    setError(null);
+    try {
+      await reassignDossier(await getAccessToken(), id, targetOfficerId.trim());
+      setTargetOfficerId("");
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Không thể phân công lại hồ sơ.");
+    } finally {
+      setReassigning(false);
     }
   };
 
@@ -99,6 +122,23 @@ export const DossierDetailPage = () => {
   }
 
   if (!detail) return null;
+  if (isCustomerDossierSummary(detail)) {
+    const tone = detail.status === "DA_DUYET" ? "success" : detail.status === "TU_CHOI" ? "danger" : detail.status === "THIEU_GIAY_TO" ? "warning" : "info";
+    return (
+      <>
+        <Link to="/dossiers" className={styles.backLink}><ArrowLeft size={14} /> Quay lại danh sách hồ sơ</Link>
+        <Header
+          eyebrow="Trạng thái hồ sơ"
+          title={detail.dossierId}
+          subtitle="Thông tin chấm điểm, CIC và đánh giá nội bộ chỉ dành cho chuyên viên ngân hàng."
+          action={<Badge tone={tone}>{detail.statusLabel}</Badge>}
+        />
+        <Card title="Tiến độ xử lý">
+          <p>Hồ sơ hiện ở trạng thái: <strong>{detail.statusLabel}</strong>.</p>
+        </Card>
+      </>
+    );
+  }
   const { dossier, documents, completeness, cicReport, scoring, assignedOfficer, reviewDecisions } = detail;
   const dossierFinalized = dossier.status === "APPROVED" || dossier.status === "REJECTED";
 
@@ -127,6 +167,19 @@ export const DossierDetailPage = () => {
             </>
           )}
           {assignedOfficer ? <p className={styles.assigned}>Chuyên viên phụ trách: <strong>{assignedOfficer}</strong></p> : null}
+          {activeRole === "CREDIT_APPROVER" ? (
+            <div className={styles.actionRow}>
+              <input
+                aria-label="Mã chuyên viên nhận hồ sơ"
+                placeholder="officer.tam"
+                value={targetOfficerId}
+                onChange={event => setTargetOfficerId(event.target.value)}
+              />
+              <Button variant="secondary" isLoading={reassigning} disabled={reassigning || !targetOfficerId.trim()} onClick={reassign}>
+                Phân công lại
+              </Button>
+            </div>
+          ) : null}
         </Card>
 
         {scoring ? (
@@ -162,7 +215,7 @@ export const DossierDetailPage = () => {
         ) : null}
         {cicReport?.notes ? <p className={styles.decisionComment}>{cicReport.notes}</p> : null}
 
-        {!dossierFinalized ? (
+        {!dossierFinalized && activeRole === "CREDIT_OFFICER" ? (
           <form className={styles.cicForm} onSubmit={submitCic}>
             <div className={styles.cicFormGrid}>
               <label>Điểm tín dụng
@@ -227,7 +280,7 @@ export const DossierDetailPage = () => {
         )}
       </Card>
 
-      {dossier.status === "PENDING_REVIEW" ? (
+      {dossier.status === "PENDING_REVIEW" && (activeRole === "CREDIT_OFFICER" || activeRole === "CREDIT_APPROVER") ? (
         <Card title="Quyết định của chuyên viên">
           <textarea
             className={styles.commentBox}

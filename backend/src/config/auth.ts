@@ -1,7 +1,8 @@
 import jwt from "jsonwebtoken";
 import { config } from "./env";
+import { isUserRole, UserRole } from "./authorization";
 
-export type UserRole = "CREDIT_OFFICER" | "CREDIT_APPROVER";
+export type { UserRole } from "./authorization";
 
 export interface AuthTokenPayload {
   sub: string;
@@ -34,8 +35,8 @@ export const signAccessToken = (payload: AuthTokenPayload): string => {
 
 export const verifyAccessToken = (token: string): AuthTokenPayload => {
   const decoded = jwt.verify(token, getJwtSecret(), { issuer: "shb-vaic-auth" });
-  if (typeof decoded === "string" || !decoded.sub || !decoded.role || !decoded.tenantId) {
+  if (typeof decoded === "string" || !decoded.sub || !isUserRole(decoded.role) || !decoded.tenantId) {
     throw new Error("Malformed auth token payload.");
   }
-  return { sub: decoded.sub as string, role: decoded.role as UserRole, tenantId: decoded.tenantId as string };
+  return { sub: decoded.sub as string, role: decoded.role, tenantId: decoded.tenantId as string };
 };

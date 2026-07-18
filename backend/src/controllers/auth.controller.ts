@@ -3,6 +3,7 @@ import { verifyCredentials } from "../services/auth/demo-user.store";
 import { signAccessToken, ACCESS_TOKEN_TTL_SECONDS } from "../config/auth";
 import { recordAuditEvent } from "../services/governance/audit-log.service";
 import { config } from "../config/env";
+import { resolveLoginRole } from "../services/auth/authorization.service";
 
 const AUTH_RUN_ID = "auth-session";
 
@@ -27,19 +28,21 @@ export const login = async (req: Request, res: Response) => {
     }
 
     const tenantId = "bank-default";
-    const accessToken = signAccessToken({ sub: user.username, role: user.role, tenantId });
+    const role = await resolveLoginRole(tenantId, user.username, user.role);
+    if (!role) return res.status(403).json({ error: "AUTHORIZATION_PROFILE_NOT_ACTIVE" });
+    const accessToken = signAccessToken({ sub: user.username, role, tenantId });
     await recordAuditEvent(
       AUTH_RUN_ID,
       user.username,
       "human_approval",
-      { role: user.role },
+      { role },
       "allowed",
-      `Đăng nhập thành công: ${user.username} (${user.role}).`
+      `Đăng nhập thành công: ${user.username} (${role}).`
     );
 
     return res.status(200).json({
       accessToken,
-      role: user.role,
+      role,
       expiresIn: ACCESS_TOKEN_TTL_SECONDS,
       tenantId,
     });
@@ -60,8 +63,9 @@ export const createDemoSession = async (_req: Request, res: Response) => {
   }
 
   const username = "demo.officer";
-  const role = "CREDIT_OFFICER" as const;
   const tenantId = "bank-default";
+  const role = await resolveLoginRole(tenantId, username, "CREDIT_OFFICER");
+  if (role !== "CREDIT_OFFICER") return res.status(404).json({ error: "Demo session is not available" });
   const accessToken = signAccessToken({ sub: username, role, tenantId });
 
   await recordAuditEvent(
@@ -87,8 +91,9 @@ export const createDemoApproverSession = async (_req: Request, res: Response) =>
   }
 
   const username = "demo.approver";
-  const role = "CREDIT_APPROVER" as const;
   const tenantId = "bank-default";
+  const role = await resolveLoginRole(tenantId, username, "CREDIT_APPROVER");
+  if (role !== "CREDIT_APPROVER") return res.status(404).json({ error: "Demo session is not available" });
   const accessToken = signAccessToken({ sub: username, role, tenantId });
 
   await recordAuditEvent(

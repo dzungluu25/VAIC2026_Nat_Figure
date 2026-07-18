@@ -1,6 +1,6 @@
 import { pgQuery } from "../../config/pg";
 import { transitionDossierStatus } from "./dossier.service";
-import { listUsernamesByRole } from "../auth/demo-user.store";
+import { listActiveUserIdsByRole } from "../auth/authorization.service";
 import { recordAuditEvent } from "../governance/audit-log.service";
 
 /**
@@ -9,7 +9,7 @@ import { recordAuditEvent } from "../governance/audit-log.service";
  * field, so "route theo loại vay" cannot be modeled honestly yet — see demo-user.store.ts comment.
  */
 const pickLeastLoadedOfficer = async (tenantId: string): Promise<string> => {
-  const officers = listUsernamesByRole("CREDIT_OFFICER");
+  const officers = await listActiveUserIdsByRole(tenantId, "CREDIT_OFFICER");
   if (!officers.length) throw new Error("NO_CREDIT_OFFICER_AVAILABLE");
 
   const result = await pgQuery(

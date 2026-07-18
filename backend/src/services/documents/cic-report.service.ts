@@ -1,7 +1,8 @@
 import { randomUUID } from "crypto";
 import { pgQuery } from "../../config/pg";
 import { uploadDossierDocument } from "../../config/document-storage";
-import { getDossier } from "./dossier.service";
+import { AuthorizationContext } from "../../config/authorization";
+import { getScopedDossier } from "./dossier.service";
 import { recomputeDossierAfterDocumentChange } from "./checklist-completeness.service";
 import { recordAuditEvent } from "../governance/audit-log.service";
 import { DossierCicReport } from "../../types/document-intake.types";
@@ -24,8 +25,10 @@ export interface CicReportInput {
  * is made here at all. `actor` is always a CREDIT_OFFICER/CREDIT_APPROVER (route-level requireAuth),
  * so uploadedByRole='STAFF' is asserted directly rather than inferred.
  */
-export const submitCicReport = async (tenantId: string, dossierId: string, input: CicReportInput, actor: string): Promise<DossierCicReport> => {
-  const dossier = await getDossier(tenantId, dossierId);
+export const submitCicReport = async (context: AuthorizationContext, dossierId: string, input: CicReportInput): Promise<DossierCicReport> => {
+  const tenantId = context.tenantId;
+  const actor = context.userId;
+  const dossier = await getScopedDossier(context, dossierId);
   if (!dossier) throw new Error("DOSSIER_NOT_FOUND");
   if (TERMINAL_DOSSIER_STATUSES.has(dossier.status)) throw new Error("DOSSIER_ALREADY_FINALIZED");
 
@@ -49,7 +52,7 @@ export const submitCicReport = async (tenantId: string, dossierId: string, input
     dossierId, actor, "tool_call",
     { cicReportId: id, creditScore: input.creditScore, debtGroup: input.debtGroup },
     "allowed",
-    `Chuyên viên ${actor} đã tự nhập/xác minh CIC cho hồ sơ ${dossierId} (không qua OCR).`
+    `user_id=${actor}; role=${context.role}; action=CIC_UPLOAD; dossier_id=${dossierId}; Chuyên viên đã tự nhập/xác minh CIC (không qua OCR).`
   );
 
   // Symmetric with document-upload.service.ts: every write that can change completeness re-evaluates

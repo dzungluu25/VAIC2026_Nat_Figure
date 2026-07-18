@@ -1,7 +1,8 @@
 import { randomUUID } from "crypto";
 import { pgQuery } from "../../config/pg";
 import { uploadDossierDocument } from "../../config/document-storage";
-import { getDossier } from "./dossier.service";
+import { AuthorizationContext } from "../../config/authorization";
+import { getScopedDossier } from "./dossier.service";
 import { getChecklistVersion } from "./document-checklist.service";
 import { recordAuditEvent } from "../governance/audit-log.service";
 import { runDocumentIntakePipeline } from "./document-pipeline.service";
@@ -26,13 +27,14 @@ const sanitizeFilename = (name: string): string => name.replace(/[^a-zA-Z0-9._-]
  * and prior OCR results survive a re-upload (task 4's "bổ sung mà không nộp lại toàn bộ").
  */
 export const uploadDocument = async (
-  tenantId: string,
+  context: AuthorizationContext,
   dossierId: string,
   documentType: string,
-  file: UploadFileInput,
-  actor: string
+  file: UploadFileInput
 ): Promise<{ dossier: LoanDossier; document: DossierDocument; checklistItem: ChecklistDocumentType; formResult: FormValidationResult; ocrResult: OcrExtractionResult | null }> => {
-  const dossier = await getDossier(tenantId, dossierId);
+  const tenantId = context.tenantId;
+  const actor = context.userId;
+  const dossier = await getScopedDossier(context, dossierId);
   if (!dossier) throw new Error("DOSSIER_NOT_FOUND");
   if (!UPLOAD_ALLOWED_STATUSES.has(dossier.status)) throw new Error("DOSSIER_NOT_ACCEPTING_UPLOADS");
 

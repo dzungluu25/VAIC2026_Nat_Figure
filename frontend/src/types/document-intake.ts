@@ -28,6 +28,8 @@ export interface LoanDossier {
   tenantId: string;
   customerId: string;
   customerEmail: string;
+  branchId: string | null;
+  teamId: string | null;
   caseId: string | null;
   runId?: string | null;
   loanType: LoanType;
@@ -36,6 +38,14 @@ export interface LoanDossier {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export type CustomerDossierStatus = "DANG_XU_LY" | "THIEU_GIAY_TO" | "CHO_DUYET" | "DA_DUYET" | "TU_CHOI";
+
+export interface CustomerDossierSummary {
+  dossierId: string;
+  status: CustomerDossierStatus;
+  statusLabel: string;
 }
 
 export interface OcrExtractionResult {
@@ -90,7 +100,7 @@ export interface DossierReviewDecisionRecord {
   decidedAt: string;
 }
 
-export interface DossierDetail {
+export interface StaffDossierDetail {
   dossier: LoanDossier;
   documents: DossierDocumentWithOcr[];
   completeness: DossierCompletenessResult;
@@ -100,3 +110,8 @@ export interface DossierDetail {
   assignedAt: string | null;
   reviewDecisions: DossierReviewDecisionRecord[];
 }
+
+export type DossierDetail = StaffDossierDetail | CustomerDossierSummary;
+
+export const isCustomerDossierSummary = (value: LoanDossier | CustomerDossierSummary | DossierDetail): value is CustomerDossierSummary =>
+  "statusLabel" in value && !("dossier" in value);

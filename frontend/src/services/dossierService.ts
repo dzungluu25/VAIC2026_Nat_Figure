@@ -1,5 +1,5 @@
 import { apiFetch, apiFetchMultipart } from "./httpClient";
-import type { DossierCicReport, DossierDetail, DossierReviewDecisionRecord, DossierStatus, LoanDossier, LoanType, ReviewDecision } from "../types/document-intake";
+import type { CustomerDossierSummary, DossierCicReport, DossierDetail, DossierReviewDecisionRecord, DossierStatus, LoanDossier, LoanType, ReviewDecision } from "../types/document-intake";
 
 export interface ListDossiersFilter {
   status?: DossierStatus;
@@ -16,7 +16,7 @@ const toQueryString = (filter: ListDossiersFilter): string => {
   return query ? `?${query}` : "";
 };
 
-export const listDossiers = (token: string, filter: ListDossiersFilter): Promise<{ dossiers: LoanDossier[] }> =>
+export const listDossiers = (token: string, filter: ListDossiersFilter): Promise<{ dossiers: Array<LoanDossier | CustomerDossierSummary> }> =>
   apiFetch(`/api/dossiers${toQueryString(filter)}`, { token });
 
 export const getDossierDetail = (token: string, dossierId: string): Promise<DossierDetail> =>
@@ -50,3 +50,10 @@ export const submitReviewDecision = (
   comment: string | undefined
 ): Promise<DossierReviewDecisionRecord> =>
   apiFetch(`/api/dossiers/${dossierId}/review-decision`, { method: "POST", token, body: { decision, comment } });
+
+export const reassignDossier = (
+  token: string,
+  dossierId: string,
+  targetOfficerId: string
+): Promise<{ dossierId: string; assignedOfficer: string; assignedAt: string }> =>
+  apiFetch(`/api/dossiers/${dossierId}/reassign`, { method: "POST", token, body: { targetOfficerId } });

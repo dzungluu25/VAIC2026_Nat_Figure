@@ -3,6 +3,9 @@ import { getNeo4jSession } from "../../config/neo4j";
 import { setupOrchestrationCheckpointer } from "../orchestration/orchestration-graph";
 import { seedLegalKnowledgeGraph } from "./knowledge-graph-seed.service";
 import { documentChecklistCatalog, checklistItemsForLoanType } from "../../config/document-checklist";
+import { USER_ROLES } from "../../config/authorization";
+
+const SQL_USER_ROLES = USER_ROLES.map(role => `'${role}'`).join(",");
 
 export const seedDatabases = async () => {
   console.log("=== STARTING DATABASE SEED PROCESS ===");
@@ -184,12 +187,89 @@ export const seedDatabases = async () => {
     await pgQuery(`DROP TRIGGER IF EXISTS trg_checklist_version_immutable ON document_checklist_versions;`);
     await pgQuery(`CREATE TRIGGER trg_checklist_version_immutable BEFORE UPDATE OR DELETE ON document_checklist_versions FOR EACH ROW EXECUTE FUNCTION prevent_published_checklist_mutation();`);
 
+    // Authorization directory only: passwords/login remain in the existing identity adapter.
+    await pgQuery(`
+      CREATE TABLE IF NOT EXISTS app_users (
+        tenant_id VARCHAR(100) NOT NULL,
+        user_id VARCHAR(100) NOT NULL,
+        username VARCHAR(100) NOT NULL,
+        customer_id VARCHAR(50),
+        branch_id VARCHAR(100),
+        team_id VARCHAR(100),
+        status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE','DISABLED')),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (tenant_id,user_id),
+        UNIQUE (tenant_id,username)
+      );
+    `);
+    await pgQuery(`
+      CREATE TABLE IF NOT EXISTS user_roles (
+        tenant_id VARCHAR(100) NOT NULL,
+        user_id VARCHAR(100) NOT NULL,
+        role VARCHAR(40) NOT NULL CHECK (role IN (${SQL_USER_ROLES})),
+        assigned_by VARCHAR(100) NOT NULL,
+        assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (tenant_id,user_id,role),
+        FOREIGN KEY (tenant_id,user_id) REFERENCES app_users(tenant_id,user_id)
+      );
+    `);
+    await pgQuery(`
+      CREATE TABLE IF NOT EXISTS user_scope_assignments (
+        tenant_id VARCHAR(100) NOT NULL,
+        user_id VARCHAR(100) NOT NULL,
+        scope_type VARCHAR(20) NOT NULL CHECK (scope_type IN ('TENANT','BRANCH','TEAM','CUSTOMER')),
+        scope_ref VARCHAR(100) NOT NULL,
+        assigned_by VARCHAR(100) NOT NULL,
+        assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (tenant_id,user_id,scope_type,scope_ref),
+        FOREIGN KEY (tenant_id,user_id) REFERENCES app_users(tenant_id,user_id)
+      );
+    `);
+    await pgQuery(`CREATE INDEX IF NOT EXISTS idx_user_roles_role ON user_roles (tenant_id,role,user_id);`);
+    await pgQuery(`CREATE INDEX IF NOT EXISTS idx_user_scopes_lookup ON user_scope_assignments (tenant_id,scope_type,scope_ref,user_id);`);
+
+    const bootstrapUsers = [
+      { userId: "officer.tam", role: "CREDIT_OFFICER", customerId: null, branchId: "branch-default", teamId: "team-credit", scopes: [["BRANCH", "branch-default"], ["TEAM", "team-credit"]] },
+      { userId: "demo.officer", role: "CREDIT_OFFICER", customerId: null, branchId: "branch-default", teamId: "team-credit", scopes: [["BRANCH", "branch-default"], ["TEAM", "team-credit"]] },
+      { userId: "approver.lan", role: "CREDIT_APPROVER", customerId: null, branchId: "branch-default", teamId: "team-credit", scopes: [["BRANCH", "branch-default"], ["TEAM", "team-credit"]] },
+      { userId: "demo.approver", role: "CREDIT_APPROVER", customerId: null, branchId: "branch-default", teamId: "team-credit", scopes: [["BRANCH", "branch-default"], ["TEAM", "team-credit"]] },
+      { userId: "customer.demo", role: "CUSTOMER", customerId: "customer-demo", branchId: "branch-default", teamId: "team-credit", scopes: [["CUSTOMER", "customer-demo"]] },
+      { userId: "admin.demo", role: "ADMIN", customerId: null, branchId: null, teamId: null, scopes: [["TENANT", "bank-default"]] },
+      { userId: "auditor.demo", role: "AUDITOR", customerId: null, branchId: null, teamId: null, scopes: [["TENANT", "bank-default"]] },
+    ] as const;
+    for (const user of bootstrapUsers) {
+      await pgQuery(
+        `INSERT INTO app_users (tenant_id,user_id,username,customer_id,branch_id,team_id,status)
+         VALUES ('bank-default',$1,$1,$2,$3,$4,'ACTIVE') ON CONFLICT (tenant_id,user_id) DO NOTHING`,
+        [user.userId, user.customerId, user.branchId, user.teamId]
+      );
+      const existingRole = await pgQuery(`SELECT 1 FROM user_roles WHERE tenant_id='bank-default' AND user_id=$1 LIMIT 1`, [user.userId]);
+      if (!existingRole.rowCount) {
+        await pgQuery(
+          `INSERT INTO user_roles (tenant_id,user_id,role,assigned_by) VALUES ('bank-default',$1,$2,'system')`,
+          [user.userId, user.role]
+        );
+      }
+      const existingScope = await pgQuery(`SELECT 1 FROM user_scope_assignments WHERE tenant_id='bank-default' AND user_id=$1 LIMIT 1`, [user.userId]);
+      if (!existingScope.rowCount) {
+        for (const [scopeType, scopeRef] of user.scopes) {
+          await pgQuery(
+            `INSERT INTO user_scope_assignments (tenant_id,user_id,scope_type,scope_ref,assigned_by)
+             VALUES ('bank-default',$1,$2,$3,'system')`,
+            [user.userId, scopeType, scopeRef]
+          );
+        }
+      }
+    }
+
     await pgQuery(`
       CREATE TABLE IF NOT EXISTS loan_dossiers (
         dossier_id VARCHAR(50) PRIMARY KEY,
         tenant_id VARCHAR(100) NOT NULL,
         customer_id VARCHAR(50) NOT NULL,
         customer_email TEXT NOT NULL,
+        branch_id VARCHAR(100),
+        team_id VARCHAR(100),
         case_id VARCHAR(50),
         loan_type VARCHAR(20) NOT NULL,
         checklist_version VARCHAR(30) NOT NULL,
@@ -205,7 +285,11 @@ export const seedDatabases = async () => {
     await pgQuery(`ALTER TABLE loan_dossiers ADD CONSTRAINT loan_dossiers_status_check CHECK (status IN ('COLLECTING','INCOMPLETE','COMPLETE','QUEUED_FOR_SCORING','SCORED','PENDING_REVIEW','APPROVED','REJECTED','NEEDS_MORE_INFO','PENDING_CIC'));`);
     await pgQuery(`ALTER TABLE loan_dossiers ADD COLUMN IF NOT EXISTS run_id VARCHAR(50);`);
     await pgQuery(`CREATE UNIQUE INDEX IF NOT EXISTS uq_loan_dossiers_run ON loan_dossiers (run_id) WHERE run_id IS NOT NULL;`);
+    await pgQuery(`ALTER TABLE loan_dossiers ADD COLUMN IF NOT EXISTS branch_id VARCHAR(100);`);
+    await pgQuery(`ALTER TABLE loan_dossiers ADD COLUMN IF NOT EXISTS team_id VARCHAR(100);`);
+    await pgQuery(`UPDATE loan_dossiers SET branch_id=COALESCE(branch_id,'branch-default'),team_id=COALESCE(team_id,'team-credit') WHERE tenant_id='bank-default' AND (branch_id IS NULL OR team_id IS NULL);`);
     await pgQuery(`CREATE INDEX IF NOT EXISTS idx_dossiers_tenant_status ON loan_dossiers (tenant_id,status,created_at DESC);`);
+    await pgQuery(`CREATE INDEX IF NOT EXISTS idx_dossiers_org_scope ON loan_dossiers (tenant_id,branch_id,team_id,updated_at DESC);`);
 
     await pgQuery(`
       CREATE TABLE IF NOT EXISTS dossier_documents (
