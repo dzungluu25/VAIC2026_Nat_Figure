@@ -1,4 +1,5 @@
 import "./load-env";
+import path from "path";
 
 export const config = {
   port: process.env.PORT || 3000,
@@ -29,4 +30,6 @@ export const config = {
   gmailSmtpAppPassword: process.env.GMAIL_SMTP_APP_PASSWORD || "",
   gmailSenderName: process.env.GMAIL_SENDER_NAME || "SHB VAIC Credit Ops",
   supabaseStorageBucket: process.env.SUPABASE_STORAGE_BUCKET || "loan-documents",
+  documentStorageDriver: (process.env.DOCUMENT_STORAGE_DRIVER || "").toLowerCase(),
+  localDocumentStorageDir: process.env.LOCAL_DOCUMENT_STORAGE_DIR || path.resolve(process.cwd(), "uploads"),
 };

@@ -1,6 +1,6 @@
 import { apiFetch, apiFetchMultipart } from "./httpClient";
 import type { AuditEvent } from "../types/api";
-import type { CustomerDossierSummary, DossierCicReport, DossierDetail, DossierDocumentWithOcr, DossierReviewDecisionRecord, DossierStatus, LoanDossier, LoanType, ReviewDecision } from "../types/document-intake";
+import type { CustomerDossierDetail, CustomerDossierSummary, DossierCicReport, DossierDetail, DossierDocumentWithOcr, DossierReviewDecisionRecord, DossierStatus, LoanDossier, LoanType, ReviewDecision } from "../types/document-intake";
 
 export interface ListDossiersFilter {
   status?: DossierStatus;
@@ -20,7 +20,21 @@ const toQueryString = (filter: ListDossiersFilter): string => {
 export const listDossiers = (token: string, filter: ListDossiersFilter): Promise<{ dossiers: Array<LoanDossier | CustomerDossierSummary> }> =>
   apiFetch(`/api/dossiers${toQueryString(filter)}`, { token });
 
+export interface CreateDossierInput {
+  customerId?: string;
+  customerEmail: string;
+  loanType: LoanType;
+}
+
+/** Starts a new dossier. Customers create their own (customerId is taken from the session server-side). */
+export const createDossier = (token: string, input: CreateDossierInput): Promise<LoanDossier | CustomerDossierSummary> =>
+  apiFetch(`/api/dossiers`, { method: "POST", token, body: input });
+
 export const getDossierDetail = (token: string, dossierId: string): Promise<DossierDetail> =>
+  apiFetch(`/api/dossiers/${dossierId}`, { token });
+
+/** Same endpoint, customer-scoped payload (checklist gap + own document statuses, no internal data). */
+export const getCustomerDossierDetail = (token: string, dossierId: string): Promise<CustomerDossierDetail> =>
   apiFetch(`/api/dossiers/${dossierId}`, { token });
 
 export interface CicReportFormInput {
@@ -75,9 +89,10 @@ export const submitReviewDecision = (
   token: string,
   dossierId: string,
   decision: ReviewDecision,
-  comment: string | undefined
+  comment: string | undefined,
+  productTerms?: string
 ): Promise<DossierReviewDecisionRecord> =>
-  apiFetch(`/api/dossiers/${dossierId}/review-decision`, { method: "POST", token, body: { decision, comment } });
+  apiFetch(`/api/dossiers/${dossierId}/review-decision`, { method: "POST", token, body: { decision, comment, productTerms } });
 
 export const reassignDossier = (
   token: string,

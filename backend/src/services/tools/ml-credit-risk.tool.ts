@@ -1,3 +1,5 @@
+import fs from "fs";
+
 export interface MlCreditRiskResponse {
   application_id: string;
   model_version: string;
@@ -23,7 +25,10 @@ export const estimateCreditRisk = async (
   applicationId: string,
   features: Record<string, unknown>
 ): Promise<MlCreditRiskResponse> => {
-  const baseUrl = process.env.CREDIT_RISK_MODEL_URL ?? "http://credit-risk-model:8000";
+  let baseUrl = process.env.CREDIT_RISK_MODEL_URL ?? "http://credit-risk-model:8000";
+  if (baseUrl.includes("//credit-risk-model:") && !fs.existsSync("/.dockerenv")) {
+    baseUrl = baseUrl.replace("//credit-risk-model:", "//localhost:");
+  }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 2_500);
   try {

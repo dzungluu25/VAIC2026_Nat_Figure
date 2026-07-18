@@ -1,3 +1,4 @@
+
 import express from "express";
 import type { NextFunction, Request, Response } from "express";
 import cors from "cors";
@@ -5,6 +6,9 @@ import authRoutes from "./routes/auth.routes";
 import orchestrationRoutes from "./routes/orchestration.routes";
 import { runRoutes, tenantRoutes, workflowRoutes } from "./routes/platform.routes";
 import { documentChecklistRoutes, dossierRoutes } from "./routes/document-intake.routes";
+import { notificationRoutes } from "./routes/notification.routes";
+import { adminRoutes } from "./routes/admin.routes";
+import { ocrRoutes } from "./routes/ocr.routes";
 import authorizationRoutes from "./routes/authorization.routes";
 
 const app = express();
@@ -33,6 +37,9 @@ app.use("/api/tenants", tenantRoutes);
 app.use("/api/runs", runRoutes);
 app.use("/api/document-checklists", documentChecklistRoutes);
 app.use("/api/dossiers", dossierRoutes);
+app.use("/api/notifications", notificationRoutes);
+app.use("/api/admin", adminRoutes);
+app.use("/api/ocr", ocrRoutes);
 app.use("/api/users", authorizationRoutes);
 
 export default app;

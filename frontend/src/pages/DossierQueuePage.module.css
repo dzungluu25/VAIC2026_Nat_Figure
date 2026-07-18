@@ -86,3 +86,37 @@
   font-size: 10.5px;
   white-space: nowrap;
 }
+
+.createCard { margin: 4px 0 20px; }
+.createForm { display: flex; flex-wrap: wrap; align-items: end; gap: var(--space-4); }
+.createField { display: flex; flex-direction: column; gap: 6px; color: var(--color-text-muted); font-size: 11px; font-weight: 650; }
+.createField select, .createField input { padding: 9px 11px; border: 1px solid rgba(23,78,65,.16); border-radius: 9px; background: #fff; color: var(--color-text); font-size: 12.5px; min-width: 220px; }
+.createField select:focus, .createField input:focus { outline: none; border-color: var(--color-brand); box-shadow: 0 0 0 3px var(--color-brand-soft); }
+
+.customerRow {
+  padding: 14px 18px;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+.customerInfo { text-decoration: none; color: inherit; min-width: 0; }
+.customerInfo strong { display: block; font-size: 13.5px; font-weight: 700; }
+.customerInfo:hover strong { color: var(--color-brand); }
+.uploadBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 13px;
+  border-radius: 9px;
+  background: var(--color-brand);
+  color: #fff;
+  text-decoration: none;
+  font-size: 11.5px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.uploadBtn:hover { filter: brightness(1.06); }

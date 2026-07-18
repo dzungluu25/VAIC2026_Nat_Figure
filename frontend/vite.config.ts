@@ -7,5 +7,11 @@ export default defineConfig({
   envDir: '../',
   server: {
     allowedHosts: ["frontend-production-cb3f5.up.railway.app"],
+    // Docker bind mounts on Windows/macOS don't emit native FS events, so vite's HMR watcher
+    // never sees edits. Polling makes hot-reload work without restarting the container.
+    watch: {
+      usePolling: true,
+      interval: 300,
+    },
   }
 })

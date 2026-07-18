@@ -3,16 +3,16 @@ import path from "path";
 import fs from "fs";
 
 const envCandidates = [
-  path.resolve(process.cwd(), ".env"),
-  path.resolve(process.cwd(), "../.env"),
-  path.resolve(__dirname, "../../.env"),
   path.resolve(__dirname, "../../../.env"),
+  path.resolve(__dirname, "../../.env"),
+  path.resolve(process.cwd(), "../.env"),
+  path.resolve(process.cwd(), ".env"),
 ];
 
-const envPath = envCandidates.find(candidate => fs.existsSync(candidate));
+const uniqueCandidates = Array.from(new Set(envCandidates));
 
-if (envPath) {
-  dotenv.config({ path: envPath });
-} else {
-  dotenv.config();
+for (const candidate of uniqueCandidates) {
+  if (fs.existsSync(candidate)) {
+    dotenv.config({ path: candidate, override: true });
+  }
 }

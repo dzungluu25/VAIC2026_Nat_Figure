@@ -7,10 +7,18 @@ import { MetricsPage } from "./pages/MetricsPage";
 import { DossierQueuePage } from "./pages/DossierQueuePage";
 import { DossierDetailPage } from "./pages/DossierDetailPage";
 import { PolicyConsolePage } from "./pages/PolicyConsolePage";
-import { OperationsPage } from "./pages/OperationsPage";
+import { WorkflowsPage } from "./pages/WorkflowsPage";
+import { RunsPage } from "./pages/RunsPage";
+import { ChecklistAdminPage } from "./pages/ChecklistAdminPage";
+import { UsersPage } from "./pages/UsersPage";
+import { AdminPage } from "./pages/AdminPage";
 import { LoginPage } from "./pages/LoginPage";
+import { LandingPage } from "./pages/LandingPage";
 import { getDemoApproverSession } from "./services/authService";
 import { useSessionStore } from "./store/sessionStore";
+
+// Public routes never trigger the demo auto-login, so a logged-out user stays on them.
+const PUBLIC_PATHS = ["/login", "/landing"];
 
 const isTokenExpired = (token: string): boolean => {
   try {
@@ -37,10 +45,10 @@ const isTokenExpired = (token: string): boolean => {
 const AutoLoginWrapper = ({ children }: { children: React.ReactNode }) => {
   const { accessToken, setSession } = useSessionStore();
   const [loading, setLoading] = useState(true);
-  const isLoginRoute = window.location.pathname === "/login";
+  const isPublicRoute = PUBLIC_PATHS.includes(window.location.pathname);
 
   useEffect(() => {
-    if (isLoginRoute) {
+    if (isPublicRoute) {
       setLoading(false);
       return;
     }
@@ -63,7 +71,7 @@ const AutoLoginWrapper = ({ children }: { children: React.ReactNode }) => {
     } else {
       setLoading(false);
     }
-  }, [accessToken, isLoginRoute, setSession]);
+  }, [accessToken, isPublicRoute, setSession]);
 
   if (loading) {
     return (
@@ -109,10 +117,17 @@ export const App = () => (
           <Route path="dossiers/:id" element={<DossierDetailPage />} />
           <Route path="agents" element={<AgentsPage />} />
           <Route path="policy" element={<PolicyConsolePage />} />
-          <Route path="operations" element={<OperationsPage />} />
+          <Route path="workflows" element={<WorkflowsPage />} />
+          <Route path="runs" element={<RunsPage />} />
+          <Route path="checklists" element={<ChecklistAdminPage />} />
+          <Route path="users" element={<UsersPage />} />
+          <Route path="admin" element={<AdminPage />} />
+          <Route path="operations" element={<Navigate to="/workflows" replace />} />
           <Route path="metrics" element={<MetricsPage />} />
         </Route>
         <Route path="login" element={<LoginPage />} />
+        <Route path="landing" element={<LandingPage />} />
+        <Route path="workspace" element={<Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

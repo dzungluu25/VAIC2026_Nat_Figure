@@ -115,15 +115,19 @@ const VALID_DECISIONS: ReviewDecision[] = ["approved", "rejected", "more_info"];
 /** Task 6 action: Duyệt/Từ chối/Yêu cầu bổ sung — always a named human actor, see review-decision.service.ts. */
 export const reviewDecisionHandler = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { decision, comment } = req.body as { decision: unknown; comment?: unknown };
+    const { decision, comment, productTerms } = req.body as { decision: unknown; comment?: unknown; productTerms?: unknown };
     if (typeof decision !== "string" || !VALID_DECISIONS.includes(decision as ReviewDecision)) {
       return res.status(400).json({ error: "INVALID_REVIEW_DECISION" });
+    }
+    if (decision === "approved" && (typeof productTerms !== "string" || !productTerms.trim())) {
+      return res.status(400).json({ error: "PRODUCT_TERMS_REQUIRED_ON_APPROVAL" });
     }
     const result = await submitReviewDecision(
       req.user!,
       req.params.id,
       decision as ReviewDecision,
-      typeof comment === "string" ? comment : undefined
+      typeof comment === "string" ? comment : undefined,
+      typeof productTerms === "string" ? productTerms : undefined
     );
     return res.json(result);
   } catch (e) {

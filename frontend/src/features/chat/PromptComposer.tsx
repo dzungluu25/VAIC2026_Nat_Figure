@@ -1,12 +1,60 @@
-import { useState, type FormEvent } from "react";
-import { CheckCircle2, CircleDollarSign, FileCheck2, Landmark, Plus, Send, Trash2, UserRound, FileText, Sparkles, ClipboardList, AlertCircle } from "lucide-react";
+import { useState, type FormEvent, type ReactNode } from "react";
+import { CheckCircle2, CircleDollarSign, FileCheck2, Landmark, Plus, Send, Trash2, UserRound, FileText, Sparkles, ClipboardList, AlertCircle, Upload } from "lucide-react";
 import { Card } from "../../components/Card";
 import { Button } from "../../components/Button";
 import { useAgentStream } from "../../hooks/useAgentStream";
 import { extractDraftCase } from "../../services/orchestrationService";
+import { extractOcrText } from "../../services/ocrService";
 import { getDemoAccessToken } from "../../services/authService";
+import { ApiError } from "../../services/httpClient";
 import type { RetailCaseInput } from "../../types/api";
 import styles from "./PromptComposer.module.css";
+
+/** Evidence field with inline OCR: type a source, or upload a document (.docx/.pdf/image) and the
+ * extracted text fills the field so the appraisal has real document content. */
+const EvidenceField = ({ label, value, onChange, placeholder, error }: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  error?: ReactNode;
+}) => {
+  const [uploading, setUploading] = useState(false);
+  const [ocrError, setOcrError] = useState<string | null>(null);
+  const [meta, setMeta] = useState<{ filename: string; confidence: number } | null>(null);
+
+  const onFile = async (file: File | undefined) => {
+    if (!file) return;
+    setUploading(true);
+    setOcrError(null);
+    try {
+      const token = await getDemoAccessToken();
+      const result = await extractOcrText(token, file);
+      onChange(result.text || value);
+      setMeta({ filename: result.filename, confidence: result.averageConfidence });
+    } catch (err) {
+      setOcrError(err instanceof ApiError ? err.message : "OCR thất bại.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <label className={styles.full}>
+      {label} *
+      <div className={styles.evidenceRow}>
+        <textarea className={styles.evidenceInput} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} rows={2} />
+        <label className={styles.ocrBtn} aria-disabled={uploading}>
+          {uploading ? "Đang OCR…" : <><Upload size={13} /> Tải lên & OCR</>}
+          <input type="file" accept=".docx,application/pdf,image/*" hidden disabled={uploading} onChange={e => onFile(e.target.files?.[0])} />
+        </label>
+      </div>
+      {meta ? <span className={styles.ocrMeta}>✓ Đã OCR {meta.filename} · độ tin cậy {Math.round(meta.confidence * 100)}%</span> : null}
+      {ocrError ? <span className={styles.error} data-form-error="true">{ocrError}</span> : null}
+      {error}
+    </label>
+  );
+};
 
 type Income = { type: "salary" | "freelance" | "rental"; amount: string; evidence: string };
 type Debt = { type: "auto" | "credit_card" | "other"; monthlyOwed: string; outstandingAmount: string; limit: string; evidence: string };
@@ -18,6 +66,23 @@ const initialDebt = (): Debt => ({ type: "other", monthlyOwed: "", outstandingAm
 const initialProperty = (): Property => ({ type: "apartment", value: "", status: "completed", projectCode: "", evidence: "" });
 const positiveNumber = (value: string) => Number(value) > 0;
 const nonNegativeNumber = (value: string) => value !== "" && Number(value) >= 0;
+
+// One-click demo scenarios — each is crafted to exercise a different multi-agent path so the
+// orchestration graph lights up differently (self-correction, legal exception, fast lane).
+const SAMPLE_CASES: Array<{ label: string; text: string }> = [
+  {
+    label: "Thế chấp · ép bảo hiểm",
+    text: "Anh Trần Văn Hùng 38 tuổi, đã kết hôn, CCCD 034088001234, SĐT 0912345678, email hung.tran@example.com. Thu nhập lương chuyển khoản 55 triệu VND/tháng (sao kê 12 tháng). Đang có 1 khoản vay ô tô trả góp 8 triệu/tháng, dư nợ 300 triệu (CIC). Đề nghị vay thế chấp 2 tỷ VND mua căn hộ đã hoàn thiện trị giá 3,2 tỷ (chứng thư định giá). Nhân viên tư vấn yêu cầu mua kèm bảo hiểm nhân thọ mới được giải ngân.",
+  },
+  {
+    label: "Tín chấp · thiếu chữ ký vợ/chồng",
+    text: "Chị Nguyễn Thị Lan 32 tuổi, đã kết hôn, CCCD 001188005678, SĐT 0987654321, email lan.nguyen@example.com. Thu nhập lương 28 triệu VND/tháng (sao kê 6 tháng). Không có khoản vay nào khác. Đề nghị vay tín chấp 200 triệu VND phục vụ tiêu dùng. Tài sản dùng chung nhưng hồ sơ thiếu chữ ký đồng vay của chồng.",
+  },
+  {
+    label: "Hồ sơ sạch · thu nhập cao",
+    text: "Anh Lê Minh Quân 35 tuổi, độc thân, CCCD 079090002345, SĐT 0909111222, email quan.le@example.com. Thu nhập lương chuyển khoản 70 triệu VND/tháng (sao kê 12 tháng). Không có nợ. Đề nghị vay tín chấp 150 triệu VND, kỳ hạn 24 tháng. Hồ sơ đầy đủ, minh bạch.",
+  },
+];
 
 const hasDraftContent = (draft: unknown): boolean => {
   if (!draft || typeof draft !== "object") return false;
@@ -275,6 +340,20 @@ export const PromptComposer = () => {
 
       {activeTab === "text" ? (
         <div className={styles.textAreaContainer}>
+          <div className={styles.sampleRow}>
+            <span className={styles.sampleHint}><Sparkles size={12} /> Case mẫu (1 chạm):</span>
+            {SAMPLE_CASES.map(sample => (
+              <button
+                key={sample.label}
+                type="button"
+                className={styles.sampleChip}
+                disabled={isExtracting}
+                onClick={() => setRawText(sample.text)}
+              >
+                {sample.label}
+              </button>
+            ))}
+          </div>
           <label className={styles.textAreaLabel}>
             Mô tả hồ sơ tín dụng (Tiếng Việt)
             <textarea
@@ -340,7 +419,7 @@ export const PromptComposer = () => {
                 <div className={styles.grid}>
                   <label>Loại thu nhập *<select value={income.type} onChange={e => updateIncome(index, "type", e.target.value)}><option value="salary">Lương</option><option value="freelance">Kinh doanh/tự do</option><option value="rental">Cho thuê</option></select></label>
                   <label>Thu nhập hàng tháng (VND) *<input type="number" min="0" value={income.amount} onChange={e => updateIncome(index, "amount", e.target.value)} />{error(`income-${index}`)}</label>
-                  <label className={styles.full}>Chứng từ/nguồn xác minh *<input value={income.evidence} onChange={e => updateIncome(index, "evidence", e.target.value)} placeholder="Sao kê lương 6 tháng, hợp đồng lao động…" />{error(`incomeEvidence-${index}`)}</label>
+                  <EvidenceField label="Chứng từ/nguồn xác minh" value={income.evidence} onChange={v => updateIncome(index, "evidence", v)} placeholder="Sao kê lương 6 tháng, hợp đồng lao động…" error={error(`incomeEvidence-${index}`)} />
                 </div>
               </div>
             ))}
@@ -365,7 +444,7 @@ export const PromptComposer = () => {
                   <label>Nghĩa vụ trả hàng tháng *<input type="number" min="0" value={debt.monthlyOwed} onChange={e => updateDebt(index, "monthlyOwed", e.target.value)} />{error(`debt-${index}`)}</label>
                   <label>Dư nợ còn lại *<input type="number" min="0" value={debt.outstandingAmount} onChange={e => updateDebt(index, "outstandingAmount", e.target.value)} /></label>
                   {debt.type === "credit_card" && <label>Hạn mức thẻ *<input type="number" min="0" value={debt.limit} onChange={e => updateDebt(index, "limit", e.target.value)} />{error(`debtLimit-${index}`)}</label>}
-                  <label className={styles.full}>Nguồn xác minh *<input value={debt.evidence} onChange={e => updateDebt(index, "evidence", e.target.value)} placeholder="CIC, sao kê khoản vay…" />{error(`debtEvidence-${index}`)}</label>
+                  <EvidenceField label="Nguồn xác minh" value={debt.evidence} onChange={v => updateDebt(index, "evidence", v)} placeholder="CIC, sao kê khoản vay…" error={error(`debtEvidence-${index}`)} />
                 </div>
               </div>
             ))}
@@ -404,7 +483,7 @@ export const PromptComposer = () => {
                   <label>Giá trị tài sản (VND) *<input type="number" min="0" value={prop.value} onChange={e => updateProperty(index, "value", e.target.value)} />{error(`propertyValue-${index}`)}</label>
                   <label>Trạng thái pháp lý *<select value={prop.status} onChange={e => updateProperty(index, "status", e.target.value as any)}><option value="completed">Đã hoàn thiện</option><option value="future_project">Hình thành trong tương lai</option></select></label>
                   {prop.status === "future_project" && <label>Mã dự án *<input value={prop.projectCode} onChange={e => updateProperty(index, "projectCode", e.target.value)} />{error(`projectCode-${index}`)}</label>}
-                  <label className={styles.full}>Chứng từ/nguồn định giá *<input value={prop.evidence} onChange={e => updateProperty(index, "evidence", e.target.value)} placeholder="Chứng thư định giá, hợp đồng mua bán…" />{error(`propertyEvidence-${index}`)}</label>
+                  <EvidenceField label="Chứng từ/nguồn định giá" value={prop.evidence} onChange={v => updateProperty(index, "evidence", v)} placeholder="Chứng thư định giá, hợp đồng mua bán…" error={error(`propertyEvidence-${index}`)} />
                 </div>
               </div>
             ))}

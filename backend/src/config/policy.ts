@@ -95,6 +95,42 @@ assertPolicyDocument("agent-contracts", agentContractsJson);
 assertPolicyDocument("regulatory-baseline", regulatoryBaselineJson);
 
 const parsedDecisionPolicy = decisionPolicyJson as DecisionPolicy;
+
+// Runtime overrides for profitability parameters. These track market/ALCO conditions that change
+// faster than a policy release, so they can be set via env without editing the policy JSON. Rates
+// are bounded to [0,1]; cost/percent/minute inputs must be non-negative. Applied overrides are
+// recorded in policyMetadata for audit traceability.
+const PROFITABILITY_ENV: Record<keyof DecisionPolicy["profitability"], string> = {
+  fundingCostRate: "PROFITABILITY_FUNDING_COST_RATE",
+  expectedLossRate: "PROFITABILITY_EXPECTED_LOSS_RATE",
+  capitalAllocationRate: "PROFITABILITY_CAPITAL_ALLOCATION_RATE",
+  capitalHurdleRate: "PROFITABILITY_CAPITAL_HURDLE_RATE",
+  automatedCaseCostVnd: "PROFITABILITY_AUTOMATED_CASE_COST_VND",
+  manualCaseCostVnd: "PROFITABILITY_MANUAL_CASE_COST_VND",
+  manualProcessingMinutes: "PROFITABILITY_MANUAL_PROCESSING_MINUTES",
+  minimumRarocPercent: "PROFITABILITY_MINIMUM_RAROC_PERCENT",
+};
+const PROFITABILITY_RATE_FIELDS = new Set<keyof DecisionPolicy["profitability"]>([
+  "fundingCostRate",
+  "expectedLossRate",
+  "capitalAllocationRate",
+  "capitalHurdleRate",
+]);
+const appliedProfitabilityOverrides: string[] = [];
+(Object.keys(PROFITABILITY_ENV) as (keyof DecisionPolicy["profitability"])[]).forEach(field => {
+  const raw = process.env[PROFITABILITY_ENV[field]];
+  if (raw === undefined || raw.trim() === "") return;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`${PROFITABILITY_ENV[field]} must be a non-negative number; decision engine is disabled.`);
+  }
+  if (PROFITABILITY_RATE_FIELDS.has(field) && value > 1) {
+    throw new Error(`${PROFITABILITY_ENV[field]} must be between 0 and 1; decision engine is disabled.`);
+  }
+  parsedDecisionPolicy.profitability[field] = value;
+  appliedProfitabilityOverrides.push(`${field}=${value}`);
+});
+
 [
   ["credit.stressAnnualRate", parsedDecisionPolicy.credit.stressAnnualRate],
   ["credit.creditLimitReductionFactor", parsedDecisionPolicy.credit.creditLimitReductionFactor],
@@ -123,7 +159,12 @@ export const productCatalog = Object.freeze(productCatalogJson as ProductCatalog
 export const agentContracts = Object.freeze((agentContractsJson as { contracts: AgentContract[] }).contracts);
 export const regulatoryBaseline = Object.freeze(parsedRegulatoryBaseline);
 export const policyMetadata = Object.freeze({
-  decisionPolicy: { id: decisionPolicy.policyId, version: decisionPolicy.version, effectiveFrom: decisionPolicy.effectiveFrom },
+  decisionPolicy: {
+    id: decisionPolicy.policyId,
+    version: decisionPolicy.version,
+    effectiveFrom: decisionPolicy.effectiveFrom,
+    profitabilityOverrides: Object.freeze([...appliedProfitabilityOverrides]),
+  },
   routingCatalog: { id: routingCatalog.catalogId, version: routingCatalog.version },
   productCatalog: { id: productCatalog.catalogId, version: productCatalog.version },
   agentContracts: { id: agentContractsJson.catalogId, version: agentContractsJson.version },

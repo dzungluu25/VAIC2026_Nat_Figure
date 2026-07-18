@@ -33,8 +33,8 @@ Pipeline LoRA cho `openai/gpt-oss-20b`, bộ dữ liệu tool-calling, PII/citat
 
 ```bash
 cd llm-finetuning
-python -m unittest discover -s tests -v
-python -m src.prepare_dataset
+python -m unittest discover -s tests -v   # governance gates (stdlib only, no GPU)
+python -m src.dataset_pipeline            # build de-identified seed dataset + manifest
 ```
 
-Seed hiện tại chỉ để kiểm thử kỹ thuật (`DEMO_ONLY/NEEDS_REVIEW`). Lệnh production bị chặn cho đến khi Legal Policy Owner duyệt và bộ holdout có ít nhất 100 case độc lập.
+Seed hiện tại chỉ để kiểm thử kỹ thuật (`DEMO_ONLY/NEEDS_REVIEW`). Automation tối đa chỉ kết luận `ELIGIBLE_FOR_HUMAN_APPROVAL`; lệnh production bị chặn cho đến khi Legal Policy Owner duyệt và bộ holdout có ít nhất 100 case độc lập.

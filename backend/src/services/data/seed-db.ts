@@ -373,6 +373,27 @@ export const seedDatabases = async () => {
     `);
     await pgQuery(`CREATE INDEX IF NOT EXISTS idx_missing_notices_dossier ON dossier_missing_document_notices (dossier_id,sent_at DESC);`);
 
+    // In-app notification inbox. A notice targets either a staff user (recipient_user_id) or a
+    // customer (recipient_customer_id) — the same dossier event can reach both audiences via
+    // separate rows. This is the on-screen counterpart to the email side-channel.
+    await pgQuery(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id UUID PRIMARY KEY,
+        tenant_id VARCHAR(100) NOT NULL,
+        recipient_user_id VARCHAR(100),
+        recipient_customer_id VARCHAR(100),
+        category VARCHAR(40) NOT NULL,
+        title TEXT NOT NULL,
+        body TEXT NOT NULL,
+        dossier_id VARCHAR(50) REFERENCES loan_dossiers(dossier_id),
+        read_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        CHECK (recipient_user_id IS NOT NULL OR recipient_customer_id IS NOT NULL)
+      );
+    `);
+    await pgQuery(`CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications (tenant_id,recipient_user_id,created_at DESC);`);
+    await pgQuery(`CREATE INDEX IF NOT EXISTS idx_notifications_customer ON notifications (tenant_id,recipient_customer_id,created_at DESC);`);
+
     // DB-backed queue (this repo has no external broker) — dossiers become eligible for
     // preliminary scoring the moment checklist-completeness marks them COMPLETE.
     await pgQuery(`
@@ -410,6 +431,8 @@ export const seedDatabases = async () => {
       );
     `);
     await pgQuery(`CREATE INDEX IF NOT EXISTS idx_review_decisions_dossier ON dossier_review_decisions (dossier_id,decided_at DESC);`);
+    // Approved dossiers carry the offered product terms (free text entered by the approver).
+    await pgQuery(`ALTER TABLE dossier_review_decisions ADD COLUMN IF NOT EXISTS product_terms TEXT;`);
 
     // Seed the default checklist as an already-published v1.0.0 per loan type so the intake
     // API has something to enforce from boot. Publishing a *new* version is the only way to
