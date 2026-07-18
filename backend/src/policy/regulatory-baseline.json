@@ -1,0 +1,108 @@
+{
+  "catalogId": "vn-retail-lending-regulatory-baseline",
+  "version": "2026.07.18",
+  "scope": "Căn cứ pháp lý bắt buộc cho hoạt động cho vay cá nhân tại Việt Nam. Ngân hàng chỉ được siết chặt hơn qua tenant runtime config, không được nới lỏng vượt các sàn/trần trong tài liệu này.",
+  "groups": [
+    {
+      "id": "foundation",
+      "title": "Khung pháp lý nền tảng",
+      "description": "Bộ luật cao nhất định hình mọi giao dịch cấp tín dụng cho khách hàng cá nhân.",
+      "rules": [
+        {
+          "ruleId": "FOUNDATION_CREDIT_LIMIT_SINGLE_CUSTOMER",
+          "label": "Nguyên tắc & giới hạn cấp tín dụng cho một khách hàng",
+          "value": "Giới hạn tổng dư nợ 1 khách hàng, cấm cấp tín dụng cho một số đối tượng liên quan (HĐQT, TGĐ...)",
+          "citation": "Luật Các tổ chức tín dụng 2024 (số 32/2024/QH15), hiệu lực 01/07/2024"
+        },
+        {
+          "ruleId": "FOUNDATION_LOAN_CONTRACT_SECURED_TRANSACTION",
+          "label": "Hợp đồng vay tài sản & giao dịch bảo đảm",
+          "value": "Quyền/nghĩa vụ các bên trong hợp đồng vay; nền tảng cho thế chấp nhà đất, ô tô",
+          "citation": "Bộ luật Dân sự 2015 (số 91/2015/QH13)"
+        }
+      ]
+    },
+    {
+      "id": "core-lending",
+      "title": "Quy chế cho vay cốt lõi",
+      "description": "Nghiệp vụ cho vay hàng ngày mà thẩm định viên áp dụng trực tiếp cho từng hồ sơ.",
+      "rules": [
+        {
+          "ruleId": "CORE_LENDING_CONDITIONS_AND_DOSSIER",
+          "label": "Điều kiện vay vốn & hồ sơ khách hàng cá nhân",
+          "value": "Năng lực hành vi dân sự, mục đích vay hợp pháp, phương án khả thi, hồ sơ chứng minh thu nhập & mục đích vay",
+          "citation": "Thông tư 39/2016/TT-NHNN"
+        },
+        {
+          "ruleId": "CORE_LENDING_PROHIBITED_PURPOSES_AND_EKYC",
+          "label": "Nhu cầu vốn không được cho vay & cho vay điện tử",
+          "value": "Cấm vay để gửi tiết kiệm, góp vốn công ty chưa niêm yết, đảo nợ trái quy định; cho phép e-KYC & phê duyệt tự động",
+          "citation": "Thông tư 06/2023/TT-NHNN (sửa đổi TT39) — cơ sở pháp lý cho Auto-Approval"
+        }
+      ]
+    },
+    {
+      "id": "rate-npl",
+      "title": "Lãi suất & xử lý nợ",
+      "description": "Cơ chế lãi suất thỏa thuận và cách phân loại nợ khi khách hàng chậm trả.",
+      "rules": [
+        {
+          "ruleId": "RATE_NPL_INTEREST_RATE_TRANSPARENCY",
+          "label": "Lãi suất thỏa thuận, minh bạch phương pháp tính",
+          "value": "Thỏa thuận theo cung cầu & tín nhiệm khách hàng (trừ lĩnh vực ưu tiên có trần); phải công bố cách tính lãi",
+          "citation": "Thông tư 39/2016/TT-NHNN"
+        },
+        {
+          "ruleId": "RATE_NPL_DEBT_CLASSIFICATION_PROVISIONING",
+          "label": "Phân loại nợ & trích lập dự phòng rủi ro",
+          "value": "5 nhóm nợ theo số ngày quá hạn · trích lập 0% / 5% / 20% / 50% / 100% + dự phòng chung 0,75%",
+          "citation": "Thông tư 11/2021/TT-NHNN"
+        }
+      ]
+    },
+    {
+      "id": "collateral",
+      "title": "Tài sản đảm bảo",
+      "description": "Nhận thế chấp, định giá và xử lý tài sản đảm bảo cho khoản vay.",
+      "rules": [
+        {
+          "ruleId": "COLLATERAL_VALUATION_AND_ENFORCEMENT",
+          "label": "Nhận thế chấp, định giá & xử lý tài sản khi nợ xấu",
+          "value": "Quy định cách xác định giá trị tài sản, quyền thu giữ và xử lý khi khách hàng vi phạm nghĩa vụ trả nợ",
+          "citation": "Nghị định 21/2021/NĐ-CP"
+        },
+        {
+          "ruleId": "COLLATERAL_SECURITY_REGISTRATION",
+          "label": "Đăng ký biện pháp bảo đảm",
+          "value": "Thế chấp quyền sử dụng đất/nhà ở phải đăng ký tại Văn phòng Đăng ký đất đai mới có hiệu lực đối kháng bên thứ ba",
+          "citation": "Nghị định 99/2022/NĐ-CP"
+        },
+        {
+          "ruleId": "COLLATERAL_REAL_ESTATE_RISK_WEIGHT",
+          "label": "Hệ số rủi ro tín dụng bất động sản (theo LTV/DSC)",
+          "value": "30% – 200% tuỳ tỷ lệ cho vay/tài sản đảm bảo (LTV), tỷ lệ thu nhập/nghĩa vụ nợ (DSC) và mục đích vay",
+          "citation": "Thông tư 22/2019/TT-NHNN"
+        }
+      ]
+    },
+    {
+      "id": "data-privacy",
+      "title": "Bảo mật dữ liệu (bắt buộc cho hệ thống AI & số hóa)",
+      "description": "Mọi agent tự động trong hệ thống này phải tuân thủ nghiêm ngặt nhóm quy định này.",
+      "rules": [
+        {
+          "ruleId": "DATA_PRIVACY_EXPLICIT_CONSENT",
+          "label": "Đồng ý (consent) rõ ràng trước khi thu thập/xử lý dữ liệu",
+          "value": "Không được mặc định tick sẵn sự đồng ý; phải minh bạch trước khi thu thập CMND/CCCD, thu nhập, hôn nhân...",
+          "citation": "Nghị định 13/2023/NĐ-CP (bảo vệ dữ liệu cá nhân)"
+        },
+        {
+          "ruleId": "DATA_PRIVACY_CIC_LOOKUP_CONSENT",
+          "label": "Tra cứu lịch sử tín dụng CIC",
+          "value": "Chỉ được tra cứu lịch sử nợ khách hàng trên CIC khi có chấp thuận bằng văn bản/chứng từ điện tử tương đương",
+          "citation": "Quy định NHNN về hoạt động thông tin tín dụng (CIC)"
+        }
+      ]
+    }
+  ]
+}

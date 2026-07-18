@@ -1,0 +1,12 @@
+__pycache__/
+.pytest_cache/
+*.py[cod]
+.venv/
+dist/
+*.egg-info/
+
+# Demo data and artifacts are reproducible via README commands. In a real bank,
+# both belong in governed object storage/model registry rather than Git.
+data/*.csv
+artifacts/
+

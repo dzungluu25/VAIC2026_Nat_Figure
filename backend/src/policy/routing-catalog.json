@@ -1,0 +1,13 @@
+{
+  "catalogId": "dynamic-input-security",
+  "version": "2026.07.18.1",
+  "injectionSignals": [
+    "ignore all previous instructions",
+    "disregard previous instructions",
+    "override security check",
+    "override policy check",
+    "bypass safety rules",
+    "bo qua moi chi dan truoc",
+    "ghi de kiem tra bao mat"
+  ]
+}

@@ -1,0 +1,157 @@
+export type LoanType = "unsecured" | "mortgage";
+
+export type DossierStatus =
+  | "COLLECTING"
+  | "INCOMPLETE"
+  | "COMPLETE"
+  | "QUEUED_FOR_SCORING"
+  | "SCORED"
+  | "PENDING_REVIEW"
+  | "APPROVED"
+  | "REJECTED"
+  | "NEEDS_MORE_INFO"
+  | "PENDING_CIC";
+
+export type DocumentStatus =
+  | "UPLOADED"
+  | "FORM_REJECTED"
+  | "FORM_ACCEPTED"
+  | "OCR_PENDING"
+  | "OCR_NEEDS_REVIEW"
+  | "OCR_COMPLETE"
+  | "OCR_FAILED";
+
+export interface ChecklistRequiredField {
+  key: string;
+  label: string;
+}
+
+export interface ChecklistDocumentType {
+  documentType: string;
+  displayName: string;
+  formCode: string | null;
+  templateFileRef: string | null;
+  formMarkers: string[];
+  requiredFields: ChecklistRequiredField[];
+  appliesToLoanTypes: LoanType[];
+  requiredForLoanTypes: LoanType[];
+  note?: string;
+}
+
+export interface DocumentChecklistCatalog {
+  catalogId: string;
+  version: string;
+  loanTypes: LoanType[];
+  minOverallConfidenceDefault: number;
+  documentTypes: ChecklistDocumentType[];
+}
+
+export interface DocumentChecklistVersion {
+  tenantId: string;
+  loanType: LoanType;
+  version: string;
+  status: "draft" | "published";
+  items: ChecklistDocumentType[];
+  createdBy: string;
+  createdAt: string;
+  publishedBy?: string;
+  publishedAt?: string;
+}
+
+export interface LoanDossier {
+  dossierId: string;
+  tenantId: string;
+  customerId: string;
+  customerEmail: string;
+  branchId: string | null;
+  teamId: string | null;
+  caseId: string | null;
+  runId?: string | null;
+  loanType: LoanType;
+  checklistVersion: string;
+  status: DossierStatus;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type CustomerDossierStatus = "DANG_XU_LY" | "THIEU_GIAY_TO" | "CHO_DUYET" | "DA_DUYET" | "TU_CHOI";
+
+export interface CustomerDossierSummary {
+  dossierId: string;
+  status: CustomerDossierStatus;
+  statusLabel: string;
+}
+
+export interface DossierDocument {
+  documentId: string;
+  dossierId: string;
+  tenantId: string;
+  documentType: string;
+  storagePath: string;
+  originalFilename: string;
+  uploadedBy: string;
+  uploadedAt: string;
+  status: DocumentStatus;
+}
+
+export interface FormValidationResult {
+  passed: boolean;
+  reason: string | null;
+  matchedMarkers: string[];
+  missingMarkers: string[];
+}
+
+export interface OcrFieldConfidence {
+  [fieldKey: string]: number;
+}
+
+export interface OcrExtractionResult {
+  id: string;
+  documentId: string;
+  tenantId: string;
+  extractedFields: Record<string, string>;
+  fieldConfidence: OcrFieldConfidence;
+  overallConfidence: number;
+  missingRequiredFields: string[];
+  engine: string;
+  createdAt: string;
+}
+
+export interface DossierCompletenessResult {
+  complete: boolean;
+  missingDocumentTypes: Array<{ documentType: string; displayName: string }>;
+}
+
+/**
+ * Kept entirely separate from DossierDocument/dossier_documents: CIC never goes through the
+ * customer OCR/form-validation pipeline. uploadedByRole is a literal constant the server sets — it
+ * does not compare against a "customer" identity, because this system has no customer account.
+ */
+export interface DossierCicReport {
+  id: string;
+  dossierId: string;
+  tenantId: string;
+  storagePath: string | null;
+  originalFilename: string | null;
+  creditScore: string;
+  totalOutstandingDebt: string;
+  debtGroup: string;
+  reportDate: string;
+  notes: string | null;
+  uploadedByRole: "STAFF";
+  uploadedBy: string;
+  uploadedAt: string;
+}
+
+export type ReviewDecision = "approved" | "rejected" | "more_info";
+
+export interface DossierReviewDecisionRecord {
+  id: string;
+  dossierId: string;
+  tenantId: string;
+  reviewer: string;
+  decision: ReviewDecision;
+  comment: string | null;
+  decidedAt: string;
+}

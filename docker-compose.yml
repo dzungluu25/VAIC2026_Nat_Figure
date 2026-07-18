@@ -1,0 +1,119 @@
+services:
+  credit-risk-model:
+    profiles: ["ml"]
+    build:
+      context: ./ml-credit-service
+    ports:
+      - "8000:8000"
+    environment:
+      - CREDIT_MODEL_DIR=/models/champion
+    volumes:
+      - ./ml-credit-service/artifacts/champion:/models/champion:ro
+    networks:
+      - vaic-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  neo4j:
+    image: neo4j:5-community
+    container_name: vaic_neo4j
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      - NEO4J_AUTH=neo4j/vaic_neo_pass
+      - NEO4J_dbms_memory_heap_initial__size=256m
+      - NEO4J_dbms_memory_heap_max__size=512m
+      - NEO4J_dbms_memory_pagecache_size=256m
+    volumes:
+      - neo4jdata:/data
+    networks:
+      - vaic-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: vaic_postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=${PG_USER:-vaic}
+      - POSTGRES_PASSWORD=${PG_PASSWORD:-vaic_dev_password}
+      - POSTGRES_DB=${PG_DB:-vaic_db}
+    volumes:
+      - postgresdata:/var/lib/postgresql/data
+    networks:
+      - vaic-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - NODE_ENV=development
+      - PG_HOST=postgres
+      - PG_PORT=5432
+      - PG_USER=${PG_USER:-vaic}
+      - PG_PASSWORD=${PG_PASSWORD:-vaic_dev_password}
+      - PG_DB=${PG_DB:-vaic_db}
+      - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:-vaic_dev_jwt_secret_change_me_32_chars_minimum}
+      - DEMO_OFFICER_PASSWORD=${DEMO_OFFICER_PASSWORD:-demo_officer_password}
+      - DEMO_APPROVER_PASSWORD=${DEMO_APPROVER_PASSWORD:-demo_approver_password}
+      - DEMO_ADMIN_PASSWORD=${DEMO_ADMIN_PASSWORD:-demo_admin_password}
+      - DEMO_AUDITOR_PASSWORD=${DEMO_AUDITOR_PASSWORD:-demo_auditor_password}
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-vaic_neo_pass}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    networks:
+      - vaic-network
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - VITE_API_URL=http://localhost:3000
+    depends_on:
+      - backend
+    networks:
+      - vaic-network
+
+networks:
+  vaic-network:
+    driver: bridge
+
+volumes:
+  neo4jdata:
+  postgresdata:

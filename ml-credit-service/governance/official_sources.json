@@ -1,0 +1,62 @@
+{
+  "registry_version": "2026-07-18.1",
+  "verified_on": "2026-07-18",
+  "notice": "Registry of authoritative source locations. It is not legal advice and does not turn demo thresholds into regulation. Compliance must re-check current consolidated texts before every production promotion.",
+  "sources": [
+    {
+      "source_id": "VN-LAW-32-2024-QH15",
+      "issuer": "Quốc hội nước CHXHCN Việt Nam",
+      "title": "Luật Các tổ chức tín dụng số 32/2024/QH15",
+      "url": "https://vanban.chinhphu.vn/?classid=1&docid=211190&orggroupid=1&pageid=27160",
+      "official_domain": "vanban.chinhphu.vn",
+      "supports": ["legal governance context for credit institutions"],
+      "does_not_support": ["demo PD, DTI, LTV or pricing thresholds"]
+    },
+    {
+      "source_id": "VN-VBHN-27-2025-NHNN",
+      "issuer": "Ngân hàng Nhà nước Việt Nam",
+      "title": "Văn bản hợp nhất 27/VBHN-NHNN về phân loại tài sản có",
+      "url": "https://vbpl.vn/TW/Pages/vbpq-thuoctinh-hopnhat.aspx?ItemID=186076&View=0",
+      "official_domain": "vbpl.vn",
+      "supports": ["current consolidated source location for asset classification rules"],
+      "does_not_support": ["using application PD as an automatic legal approval decision"]
+    },
+    {
+      "source_id": "VN-DECREE-13-2023-NDCP",
+      "issuer": "Chính phủ nước CHXHCN Việt Nam",
+      "title": "Nghị định 13/2023/NĐ-CP về bảo vệ dữ liệu cá nhân",
+      "url": "https://vanban.chinhphu.vn/default.aspx?docid=207759&pageid=27160",
+      "official_domain": "vanban.chinhphu.vn",
+      "supports": ["personal-data protection governance context"],
+      "does_not_support": ["a blanket legal basis for every model feature or data source"]
+    },
+    {
+      "source_id": "BCBS-D595-2025",
+      "issuer": "Basel Committee on Banking Supervision",
+      "title": "Principles for the Management of Credit Risk",
+      "url": "https://www.bis.org/bcbs/publ/d595.htm",
+      "official_domain": "bis.org",
+      "supports": ["credit risk environment", "sound credit granting", "measurement and monitoring", "independent controls"],
+      "does_not_support": ["claiming Basel certification or regulatory approval for this model"]
+    },
+    {
+      "source_id": "EBA-ML-IRB-2023",
+      "issuer": "European Banking Authority",
+      "title": "Follow-up report on the use of machine learning for IRB models",
+      "url": "https://www.eba.europa.eu/publications-and-media/press-releases/eba-publishes-follow-report-use-machine-learning-internal",
+      "official_domain": "eba.europa.eu",
+      "supports": ["prudent use and governance of ML in IRB contexts"],
+      "does_not_support": ["direct applicability as Vietnamese law", "automatic production approval"]
+    },
+    {
+      "source_id": "PYTORCH-REPRODUCIBILITY",
+      "issuer": "PyTorch",
+      "title": "Reproducibility notes",
+      "url": "https://docs.pytorch.org/docs/stable/notes/randomness.html",
+      "official_domain": "docs.pytorch.org",
+      "supports": ["technical reproducibility controls and limitations"],
+      "does_not_support": ["banking policy or legal claims"]
+    }
+  ]
+}
+

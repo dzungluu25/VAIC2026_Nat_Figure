@@ -1,0 +1,5 @@
+.shell { min-height:100vh; background: radial-gradient(circle at 8% 4%,rgba(151,225,191,.2),transparent 25rem),radial-gradient(circle at 96% 18%,rgba(201,241,127,.13),transparent 22rem),var(--color-bg); }
+.main { min-height:calc(100vh - 76px); }
+.content { max-width:1440px; margin:0 auto; padding:52px 34px 72px; animation:pageEnter .5s ease both; }
+@keyframes pageEnter { from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none} }
+@media(max-width:720px){.content{padding:30px 18px 52px}.main{min-height:calc(100vh - 66px)}}

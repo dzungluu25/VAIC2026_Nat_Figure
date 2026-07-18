@@ -1,0 +1,123 @@
+{
+  "policyId": "retail-credit-decision-policy",
+  "version": "2026.07.18.1",
+  "effectiveFrom": "2026-07-18",
+  "routing": {
+    "minimumPromptCharacters": 12,
+    "maximumPromptCharacters": 12000,
+    "minimumPromptTokens": 3,
+    "exactMatchScore": 100
+  },
+  "credit": {
+    "stressAnnualRate": 0.135,
+    "maximumDtiPercent": 60,
+    "maximumLtvPercent": 70,
+    "maximumLtvPercentByPropertyType": {
+      "apartment": 80,
+      "house": 70,
+      "land": 50
+    },
+    "maximumMortgageTenureYears": 30,
+    "autoRefinanceTenureYears": 8,
+    "creditLimitReductionFactor": 0.5,
+    "creditCardMonthlyObligationRate": 0.05,
+    "incomeRecognitionFactors": {
+      "salary": 1,
+      "freelance": 0.5,
+      "rental": 0.7
+    },
+    "minimumMonthlyLivingExpenseVnd": 5000000,
+    "ruleIds": {
+      "incomeCalculated": "CREDIT_VALID_INCOME_CALCULATED",
+      "ltvExceeded": "CREDIT_LTV_EXCEEDS_LIMIT",
+      "dtiExceeded": "CREDIT_DTI_EXCEEDS_LIMIT",
+      "restructurePassed": "CREDIT_RESTRUCTURE_PASS",
+      "restructureFailed": "CREDIT_RESTRUCTURE_FAILED"
+    }
+  },
+  "fastLane": {
+    "maximumLoanAmountVnd": 500000000,
+    "requiredPropertyStatus": "completed",
+    "requiredMaritalStatus": "single",
+    "requireNoExistingDebt": true,
+    "allowedIncomeTypes": ["salary"]
+  },
+  "autoApproval": {
+    "maximumLoanAmountVnd": 500000000,
+    "maximumDtiPercent": 40,
+    "maximumLtvPercent": 50,
+    "minimumApplicantAge": 18,
+    "maximumApplicantAge": 60,
+    "requiredPropertyStatus": "completed",
+    "requireNoExistingDebt": true,
+    "requiredConsentFields": ["credit_check", "tax_income_check"],
+    "reasonCodes": {
+      "amount": "AUTO_AMOUNT_WITHIN_LIMIT",
+      "dti": "AUTO_DTI_WITHIN_LIMIT",
+      "ltv": "AUTO_LTV_WITHIN_LIMIT",
+      "credit": "AUTO_CREDIT_RULES_PASS",
+      "collateral": "AUTO_COLLATERAL_COMPLETED",
+      "debt": "AUTO_NO_EXISTING_DEBT",
+      "consent": "AUTO_REQUIRED_CONSENT_PRESENT",
+      "age": "AUTO_AGE_WITHIN_POLICY",
+      "product": "AUTO_PRODUCT_COMPLIANCE_CLEAN"
+    }
+  },
+  "profitability": {
+    "fundingCostRate": 0.045,
+    "expectedLossRate": 0.006,
+    "capitalAllocationRate": 0.1,
+    "capitalHurdleRate": 0.15,
+    "automatedCaseCostVnd": 85000,
+    "manualCaseCostVnd": 620000,
+    "manualProcessingMinutes": 180,
+    "minimumRarocPercent": 8
+  },
+  "decisionMatrix": {
+    "ruleIds": {
+      "consentMissing": "LEGAL_CONSENT_MISSING",
+      "insuranceTying": "LEGAL_INSURANCE_TYING_DETECTED",
+      "projectNotRegistered": "LEGAL_PROJECT_NOT_REGISTERED",
+      "creditRestructureFailed": "CREDIT_RESTRUCTURE_FAILED",
+      "creditRestructurePassed": "CREDIT_RESTRUCTURE_PASS"
+    },
+    "supersededByRestructure": ["CREDIT_LTV_EXCEEDS_LIMIT", "CREDIT_DTI_EXCEEDS_LIMIT"],
+    "reasonCodes": {
+      "creditRestructured": "CREDIT_RESTRUCTURED",
+      "legalConditionsRequired": "LEGAL_CONDITIONS_REQUIRED",
+      "standardCheckPassed": "STANDARD_CHECK_PASS"
+    },
+    "requiredFixes": {
+      "consentMissing": "Yêu cầu khách hàng bổ sung thỏa thuận đồng thuận hợp lệ.",
+      "projectEvidenceMissing": "Chưa đủ bằng chứng về bảo lãnh dự án; cần chuyên viên pháp lý xác minh trước giải ngân.",
+      "creditFailed": "Hồ sơ không đủ khả năng trả nợ theo policy DTI stress sau tái cấu trúc."
+    }
+  },
+  "runtimeBudget": {
+    "maximumModelCalls": 30,
+    "estimatedCostPerModelCallUsd": 0.015,
+    "securityBlockEstimatedCostUsd": 0.02
+  },
+  "fraud": {
+    "ruleIds": {
+      "incomeDebtMismatch": "FRAUD_INCOME_DEBT_MISMATCH",
+      "collateralValueOutlier": "FRAUD_COLLATERAL_VALUE_OUTLIER",
+      "ageTenureMismatch": "FRAUD_AGE_TENURE_MISMATCH",
+      "evidenceInconsistency": "FRAUD_EVIDENCE_INCONSISTENCY"
+    },
+    "incomeDebtRatioCeiling": 15,
+    "collateralValueToLoanCeiling": 6,
+    "minimumRepaymentAgeMargin": 0
+  },
+  "uncertainty": {
+    "minimumConfidenceScore": 0.9,
+    "minimumEvidenceCoverage": 1,
+    "requireAllMandatoryAgents": true,
+    "requireSuccessfulToolCalls": true,
+    "requireLegalCitations": true,
+    "mandatoryAgentsByLane": {
+      "FAST": ["profile", "product", "credit"],
+      "COMPLEX": ["profile", "product", "credit", "legal"]
+    }
+  }
+}

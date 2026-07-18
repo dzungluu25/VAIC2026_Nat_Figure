@@ -1,0 +1,21 @@
+{
+  "catalogId": "retail-lending-products",
+  "version": "2026.07.18",
+  "primaryProductId": "PROD-HOME-MORTGAGE",
+  "products": [
+    {"productId":"PROD-HOME-MORTGAGE","name":"SHB Home Mortgage","baseRate":0.083,"preferentialRate":0.075,"tenureYearsMax":25,"insuranceRequired":false},
+    {"productId":"PROD-AUTO-REFINANCE","name":"SHB Auto Refinance","baseRate":0.095,"preferentialRate":0.089,"tenureYearsMax":8,"insuranceRequired":false}
+  ],
+  "eligibility": {"autoRefinanceProductId":"PROD-AUTO-REFINANCE"},
+  "ruleIds": {
+    "repricedClean":"PRODUCT_REPRICE_CLEAN",
+    "insuranceTying":"PRODUCT_PRICING_INSURANCE_TYING",
+    "insuranceIndependent":"PRODUCT_PRICING_INSURANCE_INDEPENDENT",
+    "legalInsuranceTying":"LEGAL_INSURANCE_TYING_DETECTED"
+  },
+  "citations": {
+    "repricedClean":"Rule định giá demo 2026.07.18 - cần Product Owner SHB phê duyệt",
+    "insuranceTying":"Tình huống xung đột bán chéo mô phỏng - không phải chính sách SHB đã ban hành",
+    "insuranceIndependent":"Guardrail định giá demo 2026.07.18 - cần Product Owner SHB phê duyệt"
+  }
+}
