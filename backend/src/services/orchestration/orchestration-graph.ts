@@ -442,6 +442,28 @@ const autoPolicyNode = async (state: OrchestrationState): Promise<Partial<Orches
     };
   }
 
+  // Fast-lane skips the legal node entirely. LEGAL_REFINANCE_PURPOSE_UNVERIFIED is a hard
+  // BLOCKER (Circular 06/2023/TT-NHNN has no system-verifiable exception for debt rollover),
+  // so refinance requests must go through the complex lane's legal review. Collateral
+  // registration (Decree 99/2022/NĐ-CP) is only a CONDITION, and every fast-lane case has
+  // property.status="completed" by definition (see classifyRiskTier) — routing all of them
+  // to the complex lane would silently disable auto-approval entirely, so that one is
+  // surfaced as a requiredFix on the FAST_PASS itself instead of gating the lane.
+  if (retailCase.requestedLoan.type === "refinance") {
+    return {
+      riskTier: "COMPLEX",
+      autoPolicyTrace: buildTrace(
+        "Refinance loan purpose cannot be auto-verified against the debt-rollover exception; routing to the complex lane for legal review.",
+        { eligible: false, loanPurpose: retailCase.requestedLoan.type },
+        "LEGAL_VERIFICATION_REQUIRES_COMPLEX_LANE"
+      ),
+      finalDecision: "HUMAN_ESCALATION",
+      approvalMode: "HYBRID_APPROVAL",
+      confidence,
+      requiredFixes: ["Chuyên viên pháp lý xác minh mục đích đảo nợ (khoản vay gốc có tài sản bảo đảm, phục vụ đời sống/mua nhà) trước khi phê duyệt."],
+    };
+  }
+
   const hasProductConflict = state.productTrace?.findings?.some(finding =>
     finding.ruleIds?.includes(productCatalog.ruleIds.insuranceTying) && finding.evidence?.insuranceTyingApplied
   ) ?? false;
@@ -479,6 +501,10 @@ const autoPolicyNode = async (state: OrchestrationState): Promise<Partial<Orches
     approvedTerms,
     businessValue: projectBusinessValue(approvedTerms),
     confidence,
+    // Collateral notarization / secured-transaction registration (Decree 99/2022/NĐ-CP) is
+    // never system-verifiable, so surface it even on the fast-approval path — the legal
+    // node never runs here to produce LEGAL_COLLATERAL_REGISTRATION_UNVERIFIED itself.
+    requiredFixes: ["Xác nhận hợp đồng thế chấp đã công chứng và đăng ký biện pháp bảo đảm tại Văn phòng Đăng ký đất đai trước khi giải ngân."],
   };
 };
 

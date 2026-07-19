@@ -425,6 +425,8 @@
     { "ruleId": "LEGAL_PROJECT_NOT_REGISTERED", "name": "Chưa xác minh bằng chứng bảo lãnh dự án", "ruleType": "LEGAL", "clauseIds": ["Clause-Future-Property"], "gateId": "DISBURSEMENT" },
     { "ruleId": "LEGAL_FUTURE_PROPERTY_GUARANTEE", "name": "Điều kiện bảo lãnh nhà ở hình thành trong tương lai", "ruleType": "LEGAL", "clauseIds": ["Clause-Future-Property"], "gateId": "DISBURSEMENT" },
     { "ruleId": "LEGAL_CONSENT_MISSING", "name": "Thiếu căn cứ xử lý dữ liệu cho truy vấn bên ngoài", "ruleType": "LEGAL", "clauseIds": ["Clause-Personal-Data-Consent"], "gateId": "EXTERNAL_DATA_CALL" },
+    { "ruleId": "LEGAL_REFINANCE_PURPOSE_UNVERIFIED", "name": "Chưa xác minh điều kiện ngoại lệ đảo nợ", "ruleType": "LEGAL", "clauseIds": ["Clause-Loan-Purpose"], "gateId": "APPROVAL" },
+    { "ruleId": "LEGAL_COLLATERAL_REGISTRATION_UNVERIFIED", "name": "Chưa xác minh công chứng và đăng ký biện pháp bảo đảm", "ruleType": "LEGAL", "clauseIds": ["Clause-Loan-Purpose"], "gateId": "DISBURSEMENT" },
     { "ruleId": "CREDIT_DTI_EXCEEDS_LIMIT", "name": "DTI vượt ngưỡng demo", "ruleType": "INTERNAL_POLICY", "clauseIds": ["Clause-DTI-Limit"], "gateId": "APPROVAL" },
     { "ruleId": "CREDIT_LTV_EXCEEDS_LIMIT", "name": "LTV vượt ngưỡng demo", "ruleType": "INTERNAL_POLICY", "clauseIds": ["Clause-LTV-Limit"], "gateId": "APPROVAL" }
   ],

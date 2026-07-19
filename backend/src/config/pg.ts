@@ -48,8 +48,10 @@ const buildPgPoolConfig = () => {
       connectionString: process.env.SUPABASE_DB_URL,
       ssl: buildSupabaseSsl(),
       max: 10,
-      idleTimeoutMillis: 500,
-      connectionTimeoutMillis: 5000,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 15000,
+      keepAlive: true,
+      keepAliveInitialDelayMillis: 10000,
     };
   }
 
@@ -65,12 +67,20 @@ const buildPgPoolConfig = () => {
     password: process.env.PG_PASSWORD || "vaic_dev_password",
     database: process.env.PG_DB || "vaic_db",
     max: 10,
-    idleTimeoutMillis: 500,
-    connectionTimeoutMillis: 5000,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 15000,
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 10000,
   };
 };
 
 export const pgPool = new Pool(buildPgPoolConfig());
+
+pgPool.on("connect", (client) => {
+  client.on("error", (err: Error) => {
+    console.error("Unexpected error on active PostgreSQL client:", err);
+  });
+});
 
 pgPool.on("error", (err: Error) => {
   console.error("Unexpected error on idle PostgreSQL client:", err);

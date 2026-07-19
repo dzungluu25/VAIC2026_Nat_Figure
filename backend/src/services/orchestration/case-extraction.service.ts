@@ -10,7 +10,7 @@ const PROPERTY_STATUSES = new Set(["completed", "future_project"]);
 const MARITAL_STATUSES = new Set(["single", "married"]);
 const INSURANCE_PREFERENCES = new Set(["accepted", "declined"]);
 
-const RETAIL_CASE_SCHEMA = {
+const DEMOGRAPHIC_CONSENT_SCHEMA = {
   type: "object",
   properties: {
     demographic: {
@@ -26,13 +26,33 @@ const RETAIL_CASE_SCHEMA = {
       required: ["name", "age", "maritalStatus", "cccd", "phone", "email"],
       additionalProperties: false,
     },
+    consent: {
+      type: "object",
+      properties: {
+        credit_check: { type: "boolean" },
+        tax_income_check: { type: "boolean" },
+        social_insurance_check: { type: "boolean" },
+        marketing: { type: "boolean" },
+      },
+      required: ["credit_check", "tax_income_check", "social_insurance_check", "marketing"],
+      additionalProperties: false,
+    },
+    insurancePreference: { type: "string", enum: ["accepted", "declined"] },
+  },
+  required: ["demographic", "consent", "insurancePreference"],
+  additionalProperties: false,
+};
+
+const FINANCIALS_SCHEMA = {
+  type: "object",
+  properties: {
     incomeSources: {
       type: "array",
       items: {
         type: "object",
         properties: {
           type: { type: "string", enum: ["salary", "freelance", "rental"] },
-          amount: { type: "number", description: "VND/tháng" },
+          amount: { type: "number" },
           evidence: { type: "string" },
         },
         required: ["type", "amount", "evidence"],
@@ -54,6 +74,14 @@ const RETAIL_CASE_SCHEMA = {
         additionalProperties: false,
       },
     },
+  },
+  required: ["incomeSources", "currentDebts"],
+  additionalProperties: false,
+};
+
+const LOAN_PROPERTY_SCHEMA = {
+  type: "object",
+  properties: {
     requestedLoan: {
       type: "object",
       properties: {
@@ -76,52 +104,63 @@ const RETAIL_CASE_SCHEMA = {
       required: ["type", "value", "status", "projectCode", "evidence"],
       additionalProperties: false,
     },
-    consent: {
+    refinanceAutoLoan: {
       type: "object",
       properties: {
-        credit_check: { type: "boolean" },
-        tax_income_check: { type: "boolean" },
-        social_insurance_check: { type: "boolean" },
-        marketing: { type: "boolean" },
+        remainingPrincipal: { type: "number" },
+        monthlyPayment: { type: "number" },
       },
-      required: ["credit_check", "tax_income_check", "social_insurance_check", "marketing"],
+      required: ["remainingPrincipal", "monthlyPayment"],
       additionalProperties: false,
     },
-    insurancePreference: { type: "string", enum: ["accepted", "declined"] },
+  },
+  required: ["requestedLoan", "property"],
+  additionalProperties: false,
+};
+
+const FULL_CASE_SCHEMA = {
+  type: "object",
+  properties: {
+    demographic: DEMOGRAPHIC_CONSENT_SCHEMA.properties.demographic,
+    consent: DEMOGRAPHIC_CONSENT_SCHEMA.properties.consent,
+    insurancePreference: DEMOGRAPHIC_CONSENT_SCHEMA.properties.insurancePreference,
+    incomeSources: FINANCIALS_SCHEMA.properties.incomeSources,
+    currentDebts: FINANCIALS_SCHEMA.properties.currentDebts,
+    requestedLoan: LOAN_PROPERTY_SCHEMA.properties.requestedLoan,
+    property: LOAN_PROPERTY_SCHEMA.properties.property,
+    refinanceAutoLoan: LOAN_PROPERTY_SCHEMA.properties.refinanceAutoLoan,
   },
   required: [
     "demographic",
+    "consent",
+    "insurancePreference",
     "incomeSources",
     "currentDebts",
     "requestedLoan",
-    "property",
-    "consent",
-    "insurancePreference",
+    "property"
   ],
   additionalProperties: false,
 };
 
-const TOOLS: ChatCompletionTool[] = [
+const FULL_CASE_TOOLS: ChatCompletionTool[] = [
   {
     type: "function",
     function: {
-      name: "submit_case",
-      description:
-        "Gửi hồ sơ khách hàng đã được trích xuất đầy đủ theo đúng schema RetailCase. CHỈ gọi tool này khi mọi trường bắt buộc đều có giá trị thực sự lấy được từ nội dung người dùng cung cấp — KHÔNG được tự bịa, đoán hoặc điền giá trị mặc định cho bất kỳ trường nào.",
-      parameters: { type: "object", properties: { case: RETAIL_CASE_SCHEMA }, required: ["case"], additionalProperties: false },
+      name: "submit_full_case",
+      description: "Gửi hồ sơ đầy đủ bao gồm thông tin cá nhân, đồng thuận, thu nhập, dư nợ hiện tại, khoản vay đề xuất và tài sản bảo đảm.",
+      parameters: { type: "object", properties: { data: FULL_CASE_SCHEMA }, required: ["data"], additionalProperties: false },
     },
   },
   {
     type: "function",
     function: {
       name: "request_more_info",
-      description:
-        "Gọi tool này khi nội dung người dùng cung cấp KHÔNG đủ để điền hết các trường bắt buộc của hồ sơ tín dụng. Liệt kê rõ ràng, bằng tiếng Việt, những thông tin còn thiếu cần hỏi lại chuyên viên/khách hàng.",
+      description: "Yêu cầu cung cấp thêm thông tin nếu thiếu bất kỳ thông tin bắt buộc nào (như thông tin cá nhân, đồng thuận, thu nhập, khoản vay đề xuất, tài sản bảo đảm).",
       parameters: {
         type: "object",
         properties: {
-          missingFields: { type: "array", items: { type: "string" }, description: "Tên các trường dữ liệu còn thiếu, vd. 'thu nhập hàng tháng', 'giá trị tài sản thế chấp'." },
-          questions: { type: "array", items: { type: "string" }, description: "Câu hỏi cụ thể, bằng tiếng Việt, để hỏi bổ sung thông tin." },
+          missingFields: { type: "array", items: { type: "string" } },
+          questions: { type: "array", items: { type: "string" } },
         },
         required: ["missingFields", "questions"],
         additionalProperties: false,
@@ -130,14 +169,16 @@ const TOOLS: ChatCompletionTool[] = [
   },
 ];
 
-const SYSTEM_PROMPT = `Bạn là trợ lý trích xuất dữ liệu cho hệ thống thẩm định tín dụng bán lẻ.
-Nhiệm vụ: đọc yêu cầu thẩm định bằng ngôn ngữ tự nhiên do chuyên viên tín dụng nhập vào, và trích xuất đúng các trường dữ liệu có trong văn bản để điền vào hồ sơ khách hàng (RetailCase).
+const SYSTEM_PROMPT_FULL_CASE = `Bạn là trợ lý trích xuất hồ sơ tín dụng bán lẻ của SHB.
+Nhiệm vụ của bạn: Đọc yêu cầu thẩm định tín dụng và trích xuất đầy đủ các thông tin:
+1. Demographic (name, age, maritalStatus, cccd, phone, email) và Consent (credit_check, tax_income_check, social_insurance_check, marketing) và insurancePreference.
+2. Financials (incomeSources và currentDebts). Nếu khách hàng khai báo không có nợ thì currentDebts là danh sách rỗng [].
+3. Loan & Property (requestedLoan, property và refinanceAutoLoan nếu có).
 
 QUY TẮC BẮT BUỘC:
-- Chỉ trích xuất thông tin THỰC SỰ CÓ trong văn bản. Không suy diễn, không ước tính, không dùng giá trị "hợp lý" thay cho dữ liệu thật.
-- Nếu thiếu bất kỳ trường bắt buộc nào (thông tin cá nhân, nguồn thu nhập, khoản nợ hiện tại, khoản vay đề xuất, tài sản thế chấp, đồng thuận tra cứu dữ liệu), PHẢI gọi request_more_info thay vì đoán.
-- Chỉ gọi submit_case khi đã có đủ toàn bộ trường bắt buộc từ chính văn bản người dùng cung cấp.
-- Luôn gọi đúng một trong hai tool: submit_case hoặc request_more_info. Không trả lời bằng văn bản thuần.`;
+- Chỉ trích xuất thông tin thực sự có trong văn bản. Không tự đoán, không tự điền.
+- Nếu thiếu bất kỳ thông tin bắt buộc nào (như thông tin cá nhân, đồng thuận, thu nhập, hoặc khoản vay/tài sản), phải gọi tool request_more_info để hỏi lại.
+- Nếu đủ thông tin, gọi submit_full_case. Luôn gọi một trong hai tool.`;
 
 export interface CaseExtractionSuccess {
   ok: true;
@@ -154,7 +195,6 @@ export type CaseExtractionResult = CaseExtractionSuccess | CaseExtractionNeedsIn
 
 const isNonEmptyString = (value: unknown): value is string => typeof value === "string" && value.trim().length > 0;
 
-/** Map common LLM output variants (including Vietnamese) to canonical enum values. */
 const normalizeMaritalStatus = (raw: unknown): "single" | "married" | null => {
   const s = String(raw ?? "").toLowerCase().trim();
   if (["single", "độc thân", "cũ", "chưa kết hôn", "unmarried"].includes(s)) return "single";
@@ -217,52 +257,23 @@ const validateExtractedCase = (value: unknown): Omit<RetailCase, "caseId" | "cus
     throw new Error("Extracted case has invalid requestedLoan.");
   }
 
-  let properties: Omit<RetailCase, "caseId" | "customerId">["properties"] = undefined;
-  let primaryProperty: Omit<RetailCase, "caseId" | "customerId">["property"] | undefined = undefined;
-
-  if (Array.isArray(raw.properties) && raw.properties.length > 0) {
-    properties = raw.properties.map((entry, index) => {
-      const p = entry as Record<string, unknown>;
-      if (
-        !p ||
-        !PROPERTY_TYPES.has(String(p.type)) ||
-        typeof p.value !== "number" ||
-        !PROPERTY_STATUSES.has(String(p.status)) ||
-        !isNonEmptyString(p.evidence)
-      ) {
-        throw new Error(`Property entry ${index} is invalid.`);
-      }
-      return {
-        type: p.type as "apartment" | "land" | "house",
-        value: p.value as number,
-        status: p.status as "completed" | "future_project",
-        projectCode: typeof p.projectCode === "string" ? p.projectCode : undefined,
-        evidence: p.evidence as string
-      };
-    });
-    primaryProperty = properties[0];
-  } else {
-    const p = raw.property as Record<string, unknown> | undefined;
-    if (
-      !p ||
-      !PROPERTY_TYPES.has(String(p.type)) ||
-      typeof p.value !== "number" ||
-      !PROPERTY_STATUSES.has(String(p.status)) ||
-      !isNonEmptyString(p.evidence)
-    ) {
-      throw new Error("Extracted case has invalid property data.");
-    }
-    primaryProperty = {
-      type: p.type as "apartment" | "land" | "house",
-      value: p.value as number,
-      status: p.status as "completed" | "future_project",
-      projectCode: typeof p.projectCode === "string" ? p.projectCode : undefined,
-      evidence: p.evidence as string
-    };
-    properties = [primaryProperty];
+  const p = raw.property as Record<string, unknown> | undefined;
+  if (
+    !p ||
+    !PROPERTY_TYPES.has(String(p.type)) ||
+    typeof p.value !== "number" ||
+    !PROPERTY_STATUSES.has(String(p.status)) ||
+    !isNonEmptyString(p.evidence)
+  ) {
+    throw new Error("Extracted case has invalid property data.");
   }
-
-  const additionalContext = typeof raw.additionalContext === "string" ? raw.additionalContext.trim() : undefined;
+  const primaryProperty = {
+    type: p.type as "apartment" | "land" | "house",
+    value: p.value as number,
+    status: p.status as "completed" | "future_project",
+    projectCode: typeof p.projectCode === "string" ? p.projectCode : undefined,
+    evidence: p.evidence as string
+  };
 
   const consent = raw.consent as Record<string, unknown> | undefined;
   if (
@@ -307,8 +318,7 @@ const validateExtractedCase = (value: unknown): Omit<RetailCase, "caseId" | "cus
       tenureYears: requestedLoan.tenureYears as number,
     },
     property: primaryProperty,
-    properties,
-    additionalContext,
+    properties: [primaryProperty],
     ...(refinanceAutoLoan ? { refinanceAutoLoan: {
       remainingPrincipal: refinanceAutoLoan.remainingPrincipal as number,
       monthlyPayment: refinanceAutoLoan.monthlyPayment as number,
@@ -323,11 +333,6 @@ const validateExtractedCase = (value: unknown): Omit<RetailCase, "caseId" | "cus
   };
 };
 
-/**
- * Extracts a structured RetailCase from a free-text credit request. The model must ground every field in the user's own
- * text (system prompt forbids guessing) and validateExtractedCase re-checks the shape
- * server-side — the model's output is never trusted directly, same as legal-reasoning.
- */
 const EXTRACTION_UNAVAILABLE_RESULT: CaseExtractionResult = {
   ok: false,
   missingFields: ["toàn bộ hồ sơ"],
@@ -336,16 +341,8 @@ const EXTRACTION_UNAVAILABLE_RESULT: CaseExtractionResult = {
   ],
 };
 
-/**
- * Every failure mode here (missing API key, network error, malformed tool-call JSON, a
- * shape the model produced that fails validateExtractedCase) must degrade to
- * NEEDS_MORE_INFO instead of an uncaught exception — an uncaught throw here surfaces as a
- * generic 500 to the credit officer, which is strictly worse than asking for more detail.
- */
 export const extractCaseFromPrompt = async (prompt: string): Promise<CaseExtractionResult> => {
   try {
-    // Structured requests from the production appraisal form are deterministic: validate
-    // them directly instead of asking an LLM to re-extract amounts and enum values.
     if (prompt.trim().startsWith("{")) {
       try {
         const structured = JSON.parse(prompt) as Record<string, unknown>;
@@ -362,50 +359,41 @@ export const extractCaseFromPrompt = async (prompt: string): Promise<CaseExtract
       }
     }
 
-    const messages: ChatCompletionMessageParam[] = [
-      { role: "system", content: SYSTEM_PROMPT },
-      { role: "user", content: prompt },
-    ];
-
     const response = await createAiCompletion("extraction", {
-      messages,
-      tools: TOOLS,
-      tool_choice: "required",
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT_FULL_CASE },
+        { role: "user", content: prompt },
+      ],
+      tools: FULL_CASE_TOOLS,
+      tool_choice: "auto",
     });
 
     const toolCall = response.choices[0].message.tool_calls?.[0];
     if (!toolCall || toolCall.type !== "function") {
-      return {
-        ok: false,
-        missingFields: ["toàn bộ hồ sơ"],
-        questions: ["Vui lòng cung cấp đầy đủ thông tin khách hàng, thu nhập, khoản vay đề xuất và tài sản thế chấp."],
-      };
+      return EXTRACTION_UNAVAILABLE_RESULT;
     }
 
-    const args = JSON.parse(toolCall.function.arguments) as Record<string, unknown>;
-
+    const args = JSON.parse(toolCall.function.arguments);
     if (toolCall.function.name === "request_more_info") {
-      const missingFields = Array.isArray(args.missingFields) ? args.missingFields.filter(isNonEmptyString) : [];
-      const questions = Array.isArray(args.questions) ? args.questions.filter(isNonEmptyString) : [];
       return {
         ok: false,
-        missingFields: missingFields.length ? missingFields : ["thông tin còn thiếu"],
-        questions: questions.length ? questions : ["Vui lòng bổ sung đầy đủ thông tin hồ sơ tín dụng."],
+        missingFields: args.missingFields || ["thông tin còn thiếu"],
+        questions: args.questions || ["Vui lòng cung cấp đầy đủ hồ sơ tín dụng."],
       };
     }
 
-    if (toolCall.function.name === "submit_case") {
-      return { ok: true, retailCase: validateExtractedCase(args.case) };
+    if (toolCall.function.name === "submit_full_case") {
+      return { ok: true, retailCase: validateExtractedCase(args.data) };
     }
 
     return EXTRACTION_UNAVAILABLE_RESULT;
   } catch (error) {
-    console.error("Case extraction failed on fallback model as well, falling back to NEEDS_MORE_INFO:", error);
+    console.error("Case extraction failed, falling back to NEEDS_MORE_INFO:", error);
     return EXTRACTION_UNAVAILABLE_RESULT;
   }
 };
 
-const DRAFT_RETAIL_CASE_SCHEMA = {
+const DRAFT_DEMOGRAPHIC_SCHEMA = {
   type: "object",
   properties: {
     demographic: {
@@ -420,6 +408,14 @@ const DRAFT_RETAIL_CASE_SCHEMA = {
       },
       additionalProperties: false,
     },
+    insurancePreference: { type: "string", enum: ["accepted", "declined"] },
+  },
+  additionalProperties: false,
+};
+
+const DRAFT_FINANCIALS_SCHEMA = {
+  type: "object",
+  properties: {
     incomeSources: {
       type: "array",
       items: {
@@ -446,6 +442,13 @@ const DRAFT_RETAIL_CASE_SCHEMA = {
         additionalProperties: false,
       },
     },
+  },
+  additionalProperties: false,
+};
+
+const DRAFT_LOAN_PROPERTY_SCHEMA = {
+  type: "object",
+  properties: {
     requestedLoan: {
       type: "object",
       properties: {
@@ -466,31 +469,36 @@ const DRAFT_RETAIL_CASE_SCHEMA = {
       },
       additionalProperties: false,
     },
-    consent: {
-      type: "object",
-      properties: {
-        credit_check: { type: "boolean" },
-        tax_income_check: { type: "boolean" },
-        social_insurance_check: { type: "boolean" },
-        marketing: { type: "boolean" },
-      },
-      additionalProperties: false,
-    },
-    insurancePreference: { type: "string", enum: ["accepted", "declined"] },
   },
   additionalProperties: false,
 };
 
-const DRAFT_TOOLS: ChatCompletionTool[] = [
+const DRAFT_CASE_SCHEMA = {
+  type: "object",
+  properties: {
+    demographic: DRAFT_DEMOGRAPHIC_SCHEMA.properties.demographic,
+    consent: DEMOGRAPHIC_CONSENT_SCHEMA.properties.consent,
+    insurancePreference: DRAFT_DEMOGRAPHIC_SCHEMA.properties.insurancePreference,
+    incomeSources: DRAFT_FINANCIALS_SCHEMA.properties.incomeSources,
+    currentDebts: DRAFT_FINANCIALS_SCHEMA.properties.currentDebts,
+    requestedLoan: DRAFT_LOAN_PROPERTY_SCHEMA.properties.requestedLoan,
+    property: DRAFT_LOAN_PROPERTY_SCHEMA.properties.property,
+  },
+  additionalProperties: false,
+};
+
+const DRAFT_CASE_TOOLS: ChatCompletionTool[] = [
   {
     type: "function",
     function: {
       name: "extract_draft_case",
-      description: "Trích xuất tối đa các thông tin khách hàng có sẵn trong văn bản để điền nháp vào form. Không tự bịa thông tin.",
-      parameters: { type: "object", properties: { draftCase: DRAFT_RETAIL_CASE_SCHEMA }, required: ["draftCase"], additionalProperties: false },
+      description: "Trích xuất các thông tin nháp có sẵn trong văn bản. Không tự bịa.",
+      parameters: { type: "object", properties: { draft: DRAFT_CASE_SCHEMA }, required: ["draft"], additionalProperties: false },
     },
   },
 ];
+
+const SYSTEM_PROMPT_DRAFT_CASE = "Bạn là trợ lý trích xuất nháp thông tin hồ sơ tín dụng. Hãy trích xuất các trường thông tin có sẵn trong văn bản bằng cách gọi tool extract_draft_case. Không được tự bịa.";
 
 const normalizeVietnameseText = (value: string): string =>
   value
@@ -590,29 +598,30 @@ const extractLocalDraftCaseFromPrompt = (prompt: string): Record<string, unknown
 
 export const extractDraftCaseFromPrompt = async (prompt: string): Promise<Record<string, unknown>> => {
   try {
-    const messages: ChatCompletionMessageParam[] = [
-      {
-        role: "system",
-        content: "Bạn là trợ lý trích xuất thông tin hồ sơ tín dụng. Hãy đọc văn bản tự nhiên của người dùng và gọi tool extract_draft_case để trích xuất các trường thông tin có sẵn. Chỉ điền những trường thực sự xuất hiện trong văn bản, các trường khác để trống."
-      },
-      { role: "user", content: prompt },
-    ];
-
-    const response = await createAiCompletion("extraction", {
-      messages,
-      tools: DRAFT_TOOLS,
+    const res = await createAiCompletion("extraction", {
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT_DRAFT_CASE },
+        { role: "user", content: prompt },
+      ],
+      tools: DRAFT_CASE_TOOLS,
       tool_choice: { type: "function", function: { name: "extract_draft_case" } },
     });
 
-    const toolCall = response.choices[0].message.tool_calls?.[0];
+    const toolCall = res.choices[0].message.tool_calls?.[0];
     if (toolCall && toolCall.type === "function" && toolCall.function.name === "extract_draft_case") {
-      const args = JSON.parse(toolCall.function.arguments) as Record<string, unknown>;
-      const draftCase = (args.draftCase as Record<string, unknown>) || {};
-      return hasDraftData(draftCase) ? draftCase : extractLocalDraftCaseFromPrompt(prompt);
+      const args = JSON.parse(toolCall.function.arguments);
+      const draftCase = args.draft || {};
+
+      if (hasDraftData(draftCase)) {
+        if (draftCase.property && (!draftCase.properties || draftCase.properties.length === 0)) {
+          draftCase.properties = [draftCase.property];
+        }
+        return draftCase;
+      }
     }
     return extractLocalDraftCaseFromPrompt(prompt);
   } catch (error) {
-    console.error("Draft extraction failed:", error);
+    console.error("Draft extraction failed, falling back to local extractor:", error);
     return extractLocalDraftCaseFromPrompt(prompt);
   }
 };

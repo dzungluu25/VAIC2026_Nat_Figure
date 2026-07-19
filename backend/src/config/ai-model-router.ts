@@ -37,30 +37,32 @@ class AiCompletionTimeoutError extends Error {
 export const AI_MODEL_PROFILES: Readonly<Record<AiTask, AiModelProfile>> = {
   intent: {
     primaryModel: config.fptExtractionModel,
-    fallbackModel: config.fptLegalModel,
+    fallbackModel: config.fptFallbackModel,
     maxOutputTokens: 256,
   },
   extraction: {
     primaryModel: config.fptExtractionModel,
-    fallbackModel: config.fptLegalModel,
+    fallbackModel: config.fptFallbackModel,
     maxOutputTokens: 4_096,
   },
   advisory: {
     primaryModel: config.fptExtractionModel,
-    fallbackModel: config.fptLegalModel,
+    fallbackModel: config.fptFallbackModel,
     maxOutputTokens: 1_500,
   },
   planning: {
     primaryModel: config.fptPlannerModel,
-    fallbackModel: config.fptLegalModel,
+    fallbackModel: config.fptFallbackModel,
     maxOutputTokens: 2_048,
   },
   legal: {
     primaryModel: config.fptLegalModel,
+    fallbackModel: config.fptFallbackModel,
     maxOutputTokens: 4_096,
   },
   "quality-check": {
     primaryModel: config.fptLegalModel,
+    fallbackModel: config.fptFallbackModel,
     maxOutputTokens: 1_500,
   },
 };

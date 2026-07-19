@@ -124,6 +124,7 @@ export interface LegalReasoningInput {
   projectCode: string | null;
   consent: ConsentRegistry;
   maritalSignatureWarning: boolean;
+  loanPurpose: RetailCase["requestedLoan"]["type"];
 }
 
 export interface LegalReasoningResult {
@@ -251,9 +252,9 @@ export const buildDeterministicLegalFindings = (
       "VIOLATION",
       "BLOCKER",
       "APPROVAL",
-      "Detected a mandatory insurance-tying signal in the product offer; approval must stop until the condition is removed.",
-      { summary: "Product findings indicate insuranceTyingApplied=true.", clauseId: "Clause-Insurance-Tying" },
-      "Remove the mandatory insurance condition and reprice the offer independently."
+      "Phát hiện dấu hiệu bắt buộc mua bảo hiểm kèm khoản vay trong đề nghị sản phẩm; phải dừng phê duyệt cho đến khi gỡ bỏ điều kiện này.",
+      { summary: "Kết quả từ Product Agent cho thấy insuranceTyingApplied=true.", clauseId: "Clause-Insurance-Tying" },
+      "Gỡ bỏ điều kiện bắt buộc mua bảo hiểm và định giá lại khoản vay độc lập."
     );
   }
 
@@ -264,9 +265,9 @@ export const buildDeterministicLegalFindings = (
         "FAIL",
         "BLOCKER",
         "CONTRACT_SIGNING",
-        "Married applicant file indicates missing spouse/co-owner signature evidence for shared property handling.",
-        { summary: "Prompt signals missing spouse/co-owner signature evidence.", clauseId: "Clause-Marital-Property" },
-        "Collect valid spouse/co-owner signature or legal property authorization before contract signing."
+        "Khách hàng đã kết hôn nhưng hồ sơ cho thấy thiếu bằng chứng chữ ký của vợ/chồng đồng sở hữu đối với tài sản chung.",
+        { summary: "Nội dung yêu cầu cho thấy thiếu bằng chứng chữ ký của vợ/chồng đồng sở hữu.", clauseId: "Clause-Marital-Property" },
+        "Thu thập chữ ký hợp lệ của vợ/chồng đồng sở hữu hoặc văn bản ủy quyền định đoạt tài sản trước khi ký hợp đồng."
       );
     } else {
       addFinding(
@@ -274,9 +275,9 @@ export const buildDeterministicLegalFindings = (
         "CONDITIONAL_PASS",
         "CONDITION",
         "CONTRACT_SIGNING",
-        "Applicant is married; marital-property confirmation is required before contract signing.",
-        { summary: "Married applicant requires marital-property documentation checkpoint.", clauseId: "Clause-Marital-Property" },
-        "Confirm marital-property consent/signature scope before contract signing."
+        "Khách hàng đã kết hôn; cần xác nhận về tài sản chung vợ chồng trước khi ký hợp đồng.",
+        { summary: "Khách hàng đã kết hôn nên cần điểm kiểm soát về hồ sơ tài sản chung vợ chồng.", clauseId: "Clause-Marital-Property" },
+        "Xác nhận phạm vi đồng thuận/chữ ký về tài sản chung vợ chồng trước khi ký hợp đồng."
       );
     }
   }
@@ -288,14 +289,14 @@ export const buildDeterministicLegalFindings = (
         "CONDITIONAL_PASS",
         "CONDITION",
         "DISBURSEMENT",
-        "Future-project collateral has guarantee evidence, but it must remain verified before disbursement.",
+        "Tài sản thế chấp là dự án hình thành trong tương lai đã có bằng chứng bảo lãnh, nhưng vẫn cần xác minh lại trước khi giải ngân.",
         {
-          summary: `Project ${input.projectCode} has guarantee evidence ${projectGuarantee?.guaranteeContractNo ?? "UNKNOWN"}.`,
+          summary: `Dự án ${input.projectCode} có bằng chứng bảo lãnh ${projectGuarantee?.guaranteeContractNo ?? "CHƯA XÁC ĐỊNH"}.`,
           clauseId: "Clause-Future-Property",
           projectCode: input.projectCode,
           verificationStatus: projectGuarantee?.verificationStatus,
         },
-        "Reconfirm project guarantee evidence before disbursement."
+        "Xác nhận lại bằng chứng bảo lãnh dự án trước khi giải ngân."
       );
     } else {
       addFinding(
@@ -303,16 +304,16 @@ export const buildDeterministicLegalFindings = (
         "BLOCKED",
         "BLOCKER",
         "DISBURSEMENT",
-        "Future-project collateral does not have verified production-grade guarantee evidence.",
+        "Tài sản thế chấp là dự án hình thành trong tương lai nhưng chưa có bằng chứng bảo lãnh đã được xác minh ở mức production.",
         {
           summary: input.projectCode
-            ? `No verified production-grade guarantee evidence was found for project ${input.projectCode}.`
-            : "Future-project collateral is missing projectCode, so guarantee evidence cannot be verified.",
+            ? `Không tìm thấy bằng chứng bảo lãnh đã xác minh ở mức production cho dự án ${input.projectCode}.`
+            : "Tài sản thế chấp là dự án hình thành trong tương lai nhưng thiếu mã dự án nên không thể xác minh bằng chứng bảo lãnh.",
           clauseId: "Clause-Future-Property",
           projectCode: input.projectCode,
           verificationStatus: projectGuarantee?.verificationStatus ?? "NOT_FOUND",
         },
-        "Provide verified project guarantee evidence before disbursement."
+        "Cung cấp bằng chứng bảo lãnh dự án đã được xác minh trước khi giải ngân."
       );
     }
   }
@@ -323,14 +324,44 @@ export const buildDeterministicLegalFindings = (
       "BLOCKED",
       "BLOCKER",
       "EXTERNAL_DATA_CALL",
-      "Required customer consent for credit or income verification is missing.",
+      "Thiếu sự đồng thuận của khách hàng cho việc tra cứu tín dụng hoặc xác minh thu nhập.",
       {
-        summary: "External credit/income checks require explicit customer consent.",
+        summary: "Việc tra cứu tín dụng/thu nhập từ bên ngoài yêu cầu khách hàng đồng thuận rõ ràng.",
         clauseId: "Clause-Personal-Data-Consent",
         credit_check: input.consent.credit_check,
         tax_income_check: input.consent.tax_income_check,
       },
-      "Collect valid consent for credit and income verification before any external data call."
+      "Thu thập đồng thuận hợp lệ cho việc tra cứu tín dụng và xác minh thu nhập trước khi gọi bất kỳ dữ liệu bên ngoài nào."
+    );
+  }
+
+  if (input.loanPurpose === "refinance") {
+    addFinding(
+      "LEGAL_REFINANCE_PURPOSE_UNVERIFIED",
+      "BLOCKED",
+      "BLOCKER",
+      "APPROVAL",
+      "Theo Thông tư 06/2023/TT-NHNN, đảo nợ chỉ được phép khi khoản vay gốc phục vụ đời sống/mua nhà và có tài sản bảo đảm; hệ thống không thể tự động xác minh điều kiện ngoại lệ này.",
+      {
+        summary: "requestedLoan.type=refinance nhưng hệ thống không có cách tự động xác nhận khoản vay gốc đủ điều kiện ngoại lệ đảo nợ.",
+        clauseId: "Clause-Loan-Purpose",
+      },
+      "Chuyên viên tín dụng xác minh thủ công khoản vay gốc (mục đích, có tài sản bảo đảm) trước khi phê duyệt đảo nợ."
+    );
+  }
+
+  if (input.propertyStatus === "completed") {
+    addFinding(
+      "LEGAL_COLLATERAL_REGISTRATION_UNVERIFIED",
+      "CONDITIONAL_PASS",
+      "CONDITION",
+      "DISBURSEMENT",
+      "Việc công chứng hợp đồng thế chấp và đăng ký biện pháp bảo đảm (Nghị định 99/2022/NĐ-CP) chưa được hệ thống xác minh và cần được xác nhận trước khi giải ngân.",
+      {
+        summary: "property.status=completed nhưng hệ thống chưa kết nối với Văn phòng Đăng ký đất đai để xác nhận việc đăng ký thế chấp đã công chứng.",
+        clauseId: "Clause-Loan-Purpose",
+      },
+      "Xác nhận hợp đồng thế chấp đã công chứng và đăng ký biện pháp bảo đảm tại Văn phòng Đăng ký đất đai trước khi giải ngân."
     );
   }
 
@@ -353,6 +384,7 @@ export const runDeterministicLegalFallback = async (
   if (input.maritalStatus === "married") clauseIds.add("Clause-Marital-Property");
   if (input.propertyStatus === "future_project") clauseIds.add("Clause-Future-Property");
   if (!input.consent.credit_check || !input.consent.tax_income_check) clauseIds.add("Clause-Personal-Data-Consent");
+  if (input.loanPurpose === "refinance" || input.propertyStatus === "completed") clauseIds.add("Clause-Loan-Purpose");
 
   const clauseQuery = dependencies.queryRegulationClause ?? queryRegulationClause;
   for (const clauseId of clauseIds) {
@@ -448,7 +480,8 @@ export const runLegalComplianceReasoning = async (
     propertyStatus: retailCase.property.status,
     projectCode: retailCase.property.projectCode ?? null,
     consent: retailCase.consent,
-    maritalSignatureWarning
+    maritalSignatureWarning,
+    loanPurpose: retailCase.requestedLoan.type,
   };
 
   const messages: ChatCompletionMessageParam[] = [

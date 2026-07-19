@@ -1,4 +1,5 @@
-import { BrainCircuit, ChartNoAxesCombined, ClipboardList, GitBranch, LayoutDashboard, ListChecks, LogOut, SlidersHorizontal, Sparkles, UserCog, UserRound, Workflow } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { BrainCircuit, ChartNoAxesCombined, ChevronDown, ClipboardList, GitBranch, LayoutDashboard, ListChecks, LogOut, SlidersHorizontal, Sparkles, UserCog, UserRound, Workflow } from "lucide-react";
 import { Link, NavLink } from "react-router-dom";
 import { useSessionStore } from "../store/sessionStore";
 import { NotificationBell } from "./NotificationBell";
@@ -21,11 +22,23 @@ const NAV_ITEMS: Array<{ to: string; label: string; icon: typeof Sparkles; roles
 export const TopNav = () => {
   const { role, clearSession } = useSessionStore();
   const visibleItems = role ? NAV_ITEMS.filter(item => item.roles.includes(role)) : NAV_ITEMS;
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
   const logout = () => {
     clearSession();
     // Hard navigation so the app remounts on a public route and the demo auto-login stays off.
     window.location.assign("/landing");
   };
+
+  useEffect(() => {
+    if (!accountMenuOpen) return;
+    const onClickOutside = (event: MouseEvent) => {
+      if (accountMenuRef.current && !accountMenuRef.current.contains(event.target as Node)) setAccountMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, [accountMenuOpen]);
+
   return (
   <header className={styles.header}>
     <div className={styles.inner}>
@@ -59,14 +72,32 @@ export const TopNav = () => {
 
       <div className={styles.actions}>
         <NotificationBell />
-        <Link to="/login" className={styles.homeLink}>
-          <UserRound size={15} />
-          <span>Đổi phiên</span>
-        </Link>
-        <button type="button" onClick={logout} className={styles.logoutBtn}>
-          <LogOut size={15} />
-          <span>Đăng xuất</span>
-        </button>
+        <div className={styles.accountMenu} ref={accountMenuRef}>
+          <button
+            type="button"
+            className={styles.accountTrigger}
+            aria-haspopup="menu"
+            aria-expanded={accountMenuOpen}
+            onClick={() => setAccountMenuOpen(prev => !prev)}
+          >
+            <UserRound size={15} />
+            <span>Tài khoản</span>
+            <ChevronDown size={13} className={accountMenuOpen ? styles.chevronOpen : ""} />
+          </button>
+
+          {accountMenuOpen ? (
+            <div className={styles.accountPanel} role="menu">
+              <Link to="/login" role="menuitem" className={styles.accountItem} onClick={() => setAccountMenuOpen(false)}>
+                <UserRound size={15} />
+                <span>Đổi phiên</span>
+              </Link>
+              <button type="button" role="menuitem" onClick={logout} className={styles.accountItemDanger}>
+                <LogOut size={15} />
+                <span>Đăng xuất</span>
+              </button>
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   </header>

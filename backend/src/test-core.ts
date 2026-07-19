@@ -188,15 +188,18 @@ const legalInput = (overrides: Partial<LegalReasoningInput> = {}): LegalReasonin
   projectCode: null,
   consent: { credit_check: true, tax_income_check: true, social_insurance_check: true, marketing: false },
   maritalSignatureWarning: false,
+  loanPurpose: "mortgage",
   ...overrides,
 });
 
 const testLegalFallback = async () => {
-  assert.deepEqual(
-    buildDeterministicLegalFindings(legalInput()),
-    [],
-    "Clean single/completed/consented case must not produce legal fallback findings"
-  );
+  // A "clean" completed-collateral case still always carries the collateral-registration
+  // disclosure (Decree 99/2022/NĐ-CP is never system-verifiable) — it's a CONDITION, not
+  // a blocker, so it coexists with an otherwise-clean file.
+  const cleanCase = buildDeterministicLegalFindings(legalInput());
+  assert.equal(cleanCase.length, 1, "Clean single/completed/consented case must only carry the collateral-registration disclosure");
+  assert.equal(cleanCase[0].ruleIds[0], "LEGAL_COLLATERAL_REGISTRATION_UNVERIFIED");
+  assert.equal(cleanCase[0].severity, "CONDITION");
 
   const missingConsent = buildDeterministicLegalFindings(legalInput({
     consent: { credit_check: false, tax_income_check: true, social_insurance_check: true, marketing: false },
@@ -222,6 +225,12 @@ const testLegalFallback = async () => {
   assert.equal(missingProjectGuarantee[0].ruleIds[0], "LEGAL_PROJECT_NOT_REGISTERED");
   assert.equal(missingProjectGuarantee[0].status, "BLOCKED");
 
+  const refinanceUnverified = buildDeterministicLegalFindings(legalInput({ loanPurpose: "refinance" }));
+  const refinanceFinding = refinanceUnverified.find(f => f.ruleIds[0] === "LEGAL_REFINANCE_PURPOSE_UNVERIFIED");
+  assert(refinanceFinding, "Refinance loan purpose must always produce LEGAL_REFINANCE_PURPOSE_UNVERIFIED");
+  assert.equal(refinanceFinding!.status, "BLOCKED");
+  assert.equal(refinanceFinding!.severity, "BLOCKER");
+
   const providerError = normalizeLlmProviderError({
     status: 400,
     message: "400 status code (no body)",
@@ -235,7 +244,8 @@ const testLegalFallback = async () => {
     queryProjectGuarantee: async () => null,
   });
   assert.equal(fallback.mode, "deterministic_fallback");
-  assert.equal(fallback.findings.length, 0);
+  assert.equal(fallback.findings.length, 1);
+  assert.equal(fallback.findings[0].ruleIds[0], "LEGAL_COLLATERAL_REGISTRATION_UNVERIFIED");
   assert.equal(fallback.toolCalls[0].toolName, "legalDeterministicFallback");
   assert.equal(fallback.toolCalls[0].status, "success");
 };
