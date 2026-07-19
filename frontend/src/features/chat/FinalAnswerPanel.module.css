@@ -109,3 +109,100 @@
   margin: 9px 0 0;
   padding-left: 17px;
 }
+
+.anomalySection {
+  margin-top: 17px;
+  padding: 16px;
+  border: 1px solid rgba(180, 83, 9, 0.15);
+  border-radius: 14px;
+  background: linear-gradient(145deg, #fdf9f3, #fffbf7);
+}
+
+.anomalyHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-warning);
+  font-size: 12.5px;
+  font-weight: 700;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.anomalyList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.anomalyCard {
+  padding: 12px 14px;
+  border: 1px solid #f1e5d5;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(180, 83, 9, 0.02);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.anomalyCard:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(180, 83, 9, 0.05);
+}
+
+.anomalyMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.anomalyAgent {
+  font-size: 10px;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-faint);
+}
+
+.anomalyCode {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+  font-family: var(--font-mono);
+}
+
+.anomalyCodeDanger {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+
+.anomalyTitle {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0 0 6px 0;
+}
+
+.anomalyReason {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+  margin: 0 0 8px 0;
+}
+
+.anomalyMethod {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9.5px;
+  color: var(--color-brand);
+  background: var(--color-brand-soft);
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-weight: 600;
+  width: fit-content;
+}

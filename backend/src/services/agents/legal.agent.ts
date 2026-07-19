@@ -2,7 +2,7 @@ import type { AgentTrace } from "../../types/trace.types";
 import type { DecisionEnvelope } from "../../types/agent.types";
 import { loadRetailCase } from "../data/retail-case-loader";
 import { runLegalComplianceReasoning } from "../rag/legal-reasoning.service";
-import { groundLegalFindings } from "../governance/citation-governance.service";
+import { groundLegalFindingsSafely } from "../governance/citation-governance.service";
 
 const STATUS_RANK: Record<DecisionEnvelope["status"], number> = {
   PASS: 0,
@@ -57,7 +57,13 @@ export const runLegalAgent = async (
 
   try {
     const result = await runLegalComplianceReasoning(retailCase, prompt, hasInsuranceTyingSignal);
-    findings = groundLegalFindings(result.findings);
+    // Ground what we can; an ungrounded finding is quarantined (BLOCKED, manual review) instead of
+    // discarding the whole batch — quarantined findings never expose unverified citations.
+    const { grounded, quarantined } = groundLegalFindingsSafely(result.findings);
+    findings = [...grounded, ...quarantined];
+    if (quarantined.length) {
+      console.warn(`Legal Agent: ${quarantined.length} finding(s) quarantined for manual legal review (unmapped rules).`);
+    }
     toolCalls = result.toolCalls;
     reasoningMode = result.mode;
     fallbackReason = result.providerError?.message;

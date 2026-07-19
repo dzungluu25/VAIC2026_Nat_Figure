@@ -75,6 +75,8 @@ export interface CustomerDossierSummary {
   dossierId: string;
   status: CustomerDossierStatus;
   statusLabel: string;
+  loanType: LoanType;
+  createdAt: string;
 }
 
 export interface OcrExtractionResult {
@@ -98,6 +100,16 @@ export interface DossierDocumentWithOcr {
   uploadedAt: string;
   status: DocumentStatus;
   ocrResult: OcrExtractionResult | null;
+  formRejectReason: string | null;
+}
+
+export interface CustomerDossierDocument {
+  documentType: string;
+  displayName: string;
+  status: DocumentStatus;
+  originalFilename: string;
+  uploadedAt: string;
+  formRejectReason: string | null;
 }
 
 export interface DossierCompletenessResult {
@@ -126,6 +138,7 @@ export interface DossierReviewDecisionRecord {
   reviewer: string;
   decision: ReviewDecision;
   comment: string | null;
+  productTerms: string | null;
   decidedAt: string;
 }
 
@@ -140,7 +153,19 @@ export interface StaffDossierDetail {
   reviewDecisions: DossierReviewDecisionRecord[];
 }
 
-export type DossierDetail = StaffDossierDetail | CustomerDossierSummary;
+export interface CustomerDossierDetail {
+  isCustomerView: true;
+  dossier: CustomerDossierSummary;
+  loanType: LoanType;
+  completeness: DossierCompletenessResult;
+  documents: CustomerDossierDocument[];
+  approvedProduct: string | null;
+}
+
+export type DossierDetail = StaffDossierDetail | CustomerDossierSummary | CustomerDossierDetail;
 
 export const isCustomerDossierSummary = (value: LoanDossier | CustomerDossierSummary | DossierDetail): value is CustomerDossierSummary =>
   "statusLabel" in value && !("dossier" in value);
+
+export const isCustomerDossierDetail = (value: DossierDetail): value is CustomerDossierDetail =>
+  "isCustomerView" in value && value.isCustomerView === true;

@@ -155,7 +155,3 @@
   flex-wrap: wrap;
   gap: 7px;
 }
-
-@media (max-width: 980px) {
-  .grid { grid-template-columns: 1fr; }
-}

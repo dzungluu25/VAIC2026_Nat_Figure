@@ -7,6 +7,7 @@ import { getChecklistVersion } from "./document-checklist.service";
 import { recordAuditEvent } from "../governance/audit-log.service";
 import { runDocumentIntakePipeline } from "./document-pipeline.service";
 import { recomputeDossierAfterDocumentChange } from "./checklist-completeness.service";
+import { createNotification } from "../notifications/notification.service";
 import { ChecklistDocumentType, DossierDocument, DossierStatus, FormValidationResult, LoanDossier, OcrExtractionResult } from "../../types/document-intake.types";
 
 export interface UploadFileInput {
@@ -65,6 +66,18 @@ export const uploadDocument = async (
     documentId, dossierId, tenantId, documentType, storagePath,
     originalFilename: file.originalFilename, uploadedBy: actor, uploadedAt, status: documentStatus,
   };
+
+  // Wrong-template upload: tell the customer in-app exactly why it was rejected and what to resubmit.
+  if (!formResult.passed) {
+    await createNotification({
+      tenantId,
+      recipientCustomerId: dossier.customerId,
+      category: "FORM_REJECTED",
+      title: `Giấy tờ "${found.item.displayName}" bị từ chối do sai mẫu`,
+      body: `${formResult.reason ?? "Tài liệu không đúng mẫu yêu cầu."} Vui lòng nộp lại đúng mẫu ${found.item.formCode ?? found.item.displayName}.`,
+      dossierId,
+    });
+  }
 
   // Task 4: every upload attempt (pass or fail) re-evaluates the checklist so INCOMPLETE / the
   // missing-document email always reflect the latest state, and COMPLETE fires the moment it's true.

@@ -3,6 +3,7 @@ import { pgQuery } from "../../config/pg";
 import { getMailTransporter } from "../../config/mailer";
 import { config } from "../../config/env";
 import { recordAuditEvent } from "../governance/audit-log.service";
+import { createNotification } from "../notifications/notification.service";
 import { LoanDossier } from "../../types/document-intake.types";
 
 interface MissingDocEntry {
@@ -44,6 +45,17 @@ export const notifyMissingDocuments = async (tenantId: string, dossier: LoanDoss
   const lastMissingTypes: string[] = last.rows[0]?.missing_document_types ?? [];
   const currentMissingTypes = missing.map(item => item.documentType);
   if (sameMissingSet(lastMissingTypes, currentMissingTypes)) return;
+
+  // On-screen counterpart to the email. Independent of SMTP success so the customer sees it in-app
+  // even when mail delivery is not configured.
+  await createNotification({
+    tenantId,
+    recipientCustomerId: dossier.customerId,
+    category: "MISSING_DOCUMENTS",
+    title: `Hồ sơ ${dossier.dossierId} cần bổ sung ${missing.length} giấy tờ`,
+    body: `Vui lòng bổ sung: ${missing.map(item => item.displayName).join(", ")}. Chỉ cần nộp đúng (các) giấy tờ còn thiếu, không cần nộp lại toàn bộ.`,
+    dossierId: dossier.dossierId,
+  });
 
   const id = randomUUID();
   try {

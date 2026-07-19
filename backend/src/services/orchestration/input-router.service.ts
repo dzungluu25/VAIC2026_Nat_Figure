@@ -1,9 +1,9 @@
+import { randomUUID } from "crypto";
 import { decisionPolicy } from "../../config/policy";
 import { RetailCase } from "../../types/case.types";
 import { extractCaseFromPrompt } from "./case-extraction.service";
 import { loadRetailCase, saveRetailCase } from "../data/retail-case-loader";
 import { assertPersistedRetailCase } from "../data/data-integrity.service";
-import { randomUUID } from "crypto";
 
 export type InputErrorCode = "INVALID_INPUT" | "UNSUPPORTED_CASE" | "AMBIGUOUS_CASE" | "NEEDS_MORE_INFO" | "DATA_SOURCE_UNAVAILABLE";
 
@@ -26,12 +26,13 @@ export class OrchestrationInputError extends Error {
   }
 }
 
-/**
- * Validates only the prompt shape. Intent classification and security screening happen
- * before this router; case extraction is model-based rather than keyword-based.
- */
+const INVALID_JSON_MESSAGE =
+  "Dữ liệu hồ sơ dạng JSON không hợp lệ. Vui lòng kiểm tra dấu phẩy, dấu ngoặc và chuỗi giá trị trước khi gửi lại.";
+
+const isJsonLikeInput = (raw: string): boolean => raw.startsWith("{") || raw.startsWith("[");
+
 const isStructuredJsonInput = (raw: string): boolean => {
-  if (!(raw.startsWith("{") || raw.startsWith("["))) return false;
+  if (!isJsonLikeInput(raw)) return false;
 
   try {
     const parsed = JSON.parse(raw);
@@ -41,12 +42,20 @@ const isStructuredJsonInput = (raw: string): boolean => {
   }
 };
 
+/**
+ * Validates only the prompt shape. Intent classification and security screening happen
+ * before this router; case extraction is model-based rather than keyword-based.
+ */
 export const screenInput = (prompt: unknown): { ok: true } | { ok: false; code: InputErrorCode; message: string } => {
   if (typeof prompt !== "string") {
     return { ok: false, code: "INVALID_INPUT", message: "Yêu cầu thẩm định phải là một chuỗi văn bản." };
   }
 
   const raw = prompt.trim();
+  if (isJsonLikeInput(raw) && !isStructuredJsonInput(raw)) {
+    return { ok: false, code: "INVALID_INPUT", message: INVALID_JSON_MESSAGE };
+  }
+
   if (raw.length < decisionPolicy.routing.minimumPromptCharacters) {
     return {
       ok: false,
@@ -77,13 +86,80 @@ export const screenInput = (prompt: unknown): { ok: true } | { ok: false; code: 
 
 const randomCaseId = (): string => `case-${randomUUID()}`;
 
-export const formatMissingInfoMessage=(missingFields:string[],questions:string[]):string=>{
-  const details=[...new Set(questions.map(item=>item.trim()).filter(Boolean))];
-  const fallback=[...new Set(missingFields.map(item=>item.trim()).filter(Boolean))].map(field=>`Vui lòng bổ sung: ${field}.`);
-  const requirements=details.length?details:fallback;
+const cleanValidationError = (error: unknown): string => {
+  const raw = error instanceof Error ? error.message : String(error ?? "unknown validation error");
+  return raw.replace(/^RetailCase validation failed:\s*/i, "").trim() || "Dữ liệu hồ sơ không khớp schema bắt buộc.";
+};
+
+const persistRetailCase = async (
+  retailCase: RetailCase,
+  tenantId: string,
+  matchedSignals: string[]
+): Promise<InputRoutingOrExtractionResult> => {
+  try {
+    await saveRetailCase(retailCase, tenantId);
+    const persistedCase = await loadRetailCase(retailCase.caseId, tenantId);
+    if (!persistedCase) {
+      return {
+        ok: false,
+        code: "DATA_SOURCE_UNAVAILABLE",
+        message: "Hồ sơ đã được trích xuất nhưng chưa thể xác nhận trong nguồn dữ liệu dùng chung; quy trình dừng trước khi gọi các agent.",
+      };
+    }
+    assertPersistedRetailCase(retailCase, persistedCase);
+    return {
+      ok: true,
+      caseId: retailCase.caseId,
+      score: decisionPolicy.routing.exactMatchScore,
+      matchedSignals,
+      extractedCase: persistedCase,
+    };
+  } catch (error) {
+    if (error instanceof Error && /RetailCase validation failed/i.test(error.message)) {
+      return {
+        ok: false,
+        code: "INVALID_INPUT",
+        message: `Dữ liệu hồ sơ không hợp lệ. Vui lòng kiểm tra các trường bắt buộc và kiểu dữ liệu: ${cleanValidationError(error)}`,
+      };
+    }
+    console.error(`Failed to persist retail case ${retailCase.caseId}:`, error);
+    return {
+      ok: false,
+      code: "DATA_SOURCE_UNAVAILABLE",
+      message: "Không thể lưu và xác minh hồ sơ trong nguồn dữ liệu dùng chung; quy trình chưa gọi MCP hoặc agent nghiệp vụ.",
+    };
+  }
+};
+
+export const formatMissingInfoMessage = (missingFields: string[], questions: string[]): string => {
+  const details = [...new Set(questions.map(item => item.trim()).filter(Boolean))];
+  const fallback = [...new Set(missingFields.map(item => item.trim()).filter(Boolean))].map(field => `Vui lòng bổ sung: ${field}.`);
+  const requirements = details.length ? details : fallback;
   return requirements.length
-    ? `Nội dung chưa đủ thông tin để dựng hồ sơ tín dụng. Các thông tin cần bổ sung:\n${requirements.map((item,index)=>`${index+1}. ${item}`).join("\n")}`
+    ? `Nội dung chưa đủ thông tin để dựng hồ sơ tín dụng. Các thông tin cần bổ sung:\n${requirements.map((item, index) => `${index + 1}. ${item}`).join("\n")}`
     : "Nội dung chưa đủ thông tin để dựng hồ sơ tín dụng. Vui lòng bổ sung đầy đủ thông tin định danh, thu nhập, nghĩa vụ nợ, khoản vay, tài sản bảo đảm và các chấp thuận tra cứu.";
+};
+
+export const routeStructuredRetailCaseInput = async (
+  retailCaseInput: unknown,
+  tenantId = "bank-default"
+): Promise<InputRoutingOrExtractionResult> => {
+  if (!retailCaseInput || typeof retailCaseInput !== "object" || Array.isArray(retailCaseInput)) {
+    return {
+      ok: false,
+      code: "INVALID_INPUT",
+      message: "Dữ liệu hồ sơ dạng form không hợp lệ. Vui lòng gửi một object retailCase đúng schema.",
+    };
+  }
+
+  const caseId = randomCaseId();
+  const retailCase = {
+    ...(retailCaseInput as Record<string, unknown>),
+    caseId,
+    customerId: `dyn-${caseId}`,
+  } as RetailCase;
+
+  return persistRetailCase(retailCase, tenantId, ["structured-form"]);
 };
 
 /**
@@ -111,31 +187,12 @@ export const routeOrExtractInput = async (
     return {
       ok: false,
       code: "NEEDS_MORE_INFO",
-      message: formatMissingInfoMessage(extraction.missingFields,extraction.questions),
+      message: formatMissingInfoMessage(extraction.missingFields, extraction.questions),
       questions: extraction.questions,
     };
   }
 
   const caseId = randomCaseId();
   const retailCase: RetailCase = { caseId, customerId: `dyn-${caseId}`, ...extraction.retailCase };
-  try {
-    await saveRetailCase(retailCase, tenantId);
-    const persistedCase = await loadRetailCase(caseId, tenantId);
-    if (!persistedCase) {
-      return {
-        ok: false,
-        code: "DATA_SOURCE_UNAVAILABLE",
-        message: "Hồ sơ đã được trích xuất nhưng chưa thể xác nhận trong nguồn dữ liệu dùng chung; quy trình dừng trước khi gọi các agent.",
-      };
-    }
-    assertPersistedRetailCase(retailCase, persistedCase);
-    return { ok: true, caseId, score: decisionPolicy.routing.exactMatchScore, matchedSignals: ["llm-extracted"], extractedCase: persistedCase };
-  } catch (error) {
-    console.error(`Failed to persist extracted retail case ${caseId}:`, error);
-    return {
-      ok: false,
-      code: "DATA_SOURCE_UNAVAILABLE",
-      message: "Không thể lưu và xác minh hồ sơ trong nguồn dữ liệu dùng chung; quy trình chưa gọi MCP hoặc agent nghiệp vụ.",
-    };
-  }
+  return persistRetailCase(retailCase, tenantId, ["llm-extracted"]);
 };

@@ -1,5 +1,5 @@
 import { apiFetch, apiFetchStream } from "./httpClient";
-import type { OrchestrationResponse, OrchestrationStreamEvent } from "../types/api";
+import type { OrchestrationRequestBody, OrchestrationResponse, OrchestrationStreamEvent } from "../types/api";
 
 /**
  * Consumes the backend's NDJSON stream (one OrchestrationStreamEvent per line) and invokes
@@ -8,13 +8,13 @@ import type { OrchestrationResponse, OrchestrationStreamEvent } from "../types/a
  * Authorization header, which EventSource cannot send.
  */
 export const streamOrchestration = async (
-  prompt: string,
+  request: OrchestrationRequestBody,
   token: string,
   approvalToken: string | undefined,
   onEvent: (event: OrchestrationStreamEvent) => void,
   signal?: AbortSignal
 ): Promise<void> => {
-  const response = await apiFetchStream("/api/orchestrate/stream", { prompt, approvalToken }, token);
+  const response = await apiFetchStream("/api/orchestrate/stream", { ...request, approvalToken }, token, signal);
 
   const reader = response.body!.getReader();
   const decoder = new TextDecoder();

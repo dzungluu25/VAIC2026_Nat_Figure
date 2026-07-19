@@ -87,11 +87,30 @@ export const OrchestrationGraph = () => {
       base.push({ id: "e-legal-legalaudit", source: "legal", target: "legalAudit" });
     }
 
-    return base.map(edge => ({
-      ...edge,
-      animated: nodes.find(n => n.id === edge.source)?.data.status === "in_progress",
-      style: { stroke: "var(--color-border)", strokeWidth: 1.5 },
-    }));
+    return base.map(edge => {
+      const sourceNode = nodes.find(n => n.id === edge.source);
+      const targetNode = nodes.find(n => n.id === edge.target);
+      const isTargetActive = targetNode?.data.status === "done" || targetNode?.data.status === "in_progress";
+      
+      let strokeColor = "#769082"; // high contrast default edge
+      let strokeWidth = 1.5;
+      
+      if (sourceNode?.data.status === "inactive" || targetNode?.data.status === "inactive") {
+        strokeColor = "#d2dad5"; // muted for inactive paths
+      } else if (sourceNode?.data.status === "in_progress") {
+        strokeColor = "#2563eb"; // blue animation for running stage
+        strokeWidth = 2;
+      } else if (sourceNode?.data.status === "done" && isTargetActive) {
+        strokeColor = "#059669"; // green for completed paths
+        strokeWidth = 2;
+      }
+
+      return {
+        ...edge,
+        animated: sourceNode?.data.status === "in_progress",
+        style: { stroke: strokeColor, strokeWidth },
+      };
+    });
   }, [hasSelfCorrection, nodes]);
 
   return (

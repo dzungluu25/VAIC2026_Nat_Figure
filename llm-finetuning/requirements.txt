@@ -1,0 +1,10 @@
+# Governance pipeline (dataset validation, evaluation, promotion gate) runs on the standard library
+# only — no install required to run the tests.
+
+# Optional training extras: install to actually fine-tune openai/gpt-oss-20b with LoRA.
+# Kept commented so CI/governance checks don't pull a GPU stack.
+# torch>=2.3
+# transformers>=4.44
+# peft>=0.12
+# datasets>=2.20
+# accelerate>=0.33

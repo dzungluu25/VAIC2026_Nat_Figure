@@ -2,6 +2,7 @@ import type { AgentTrace, AuditEvent, CostBudgetStatus } from "./trace.types";
 import type { ConditionPrecedent } from "./agent.types";
 import type { ApprovedLoanTerms, ApprovalMode, BusinessValueProjection, DecisionConfidence } from "./product.types";
 import type { ActionStepResult, ApprovalRecord, CompensationResult, ValidationIssue } from "./platform.types";
+import type { RetailCase } from "./case.types";
 
 export type CitationSourceType = "LAW" | "DECREE" | "CIRCULAR" | "INTERNAL_POLICY" | "STANDARD";
 export type CitationVerificationStatus = "VERIFIED_OFFICIAL" | "INTERNAL_REVIEW_REQUIRED";
@@ -39,7 +40,8 @@ export interface AnswerTransparency {
 }
 
 export interface OrchestrationRequest {
-  prompt: string;
+  prompt?: string;
+  retailCase?: Omit<RetailCase, "caseId" | "customerId">;
   caseId?: string;
   approvalToken?: string;
 }

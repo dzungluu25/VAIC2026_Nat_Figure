@@ -1,37 +1,46 @@
-import { BrainCircuit, ChartNoAxesCombined, ClipboardList, Settings2, SlidersHorizontal, Sparkles, UserRound } from "lucide-react";
+import { BrainCircuit, ChartNoAxesCombined, ClipboardList, GitBranch, LayoutDashboard, ListChecks, LogOut, SlidersHorizontal, Sparkles, UserCog, UserRound, Workflow } from "lucide-react";
 import { Link, NavLink } from "react-router-dom";
 import { useSessionStore } from "../store/sessionStore";
+import { NotificationBell } from "./NotificationBell";
 import type { UserRole } from "../types/api";
 import styles from "./TopNav.module.css";
 
 const NAV_ITEMS: Array<{ to: string; label: string; icon: typeof Sparkles; roles: UserRole[] }> = [
   { to: "/", label: "Thẩm định", icon: Sparkles, roles: ["CREDIT_OFFICER", "CREDIT_APPROVER"] },
   { to: "/dossiers", label: "Hồ sơ chờ duyệt", icon: ClipboardList, roles: ["CUSTOMER", "CREDIT_OFFICER", "CREDIT_APPROVER", "ADMIN", "AUDITOR"] },
-  { to: "/agents", label: "Agent flow", icon: BrainCircuit, roles: ["CREDIT_OFFICER", "CREDIT_APPROVER"] },
+  { to: "/agents", label: "Agent flow", icon: BrainCircuit, roles: ["CREDIT_APPROVER"] },
   { to: "/policy", label: "Chính sách", icon: SlidersHorizontal, roles: ["CREDIT_APPROVER"] },
-  { to: "/operations", label: "Vận hành", icon: Settings2, roles: ["CREDIT_OFFICER", "CREDIT_APPROVER", "ADMIN", "AUDITOR"] },
-  { to: "/metrics", label: "Hiệu năng", icon: ChartNoAxesCombined, roles: ["CREDIT_OFFICER", "CREDIT_APPROVER", "ADMIN", "AUDITOR"] },
+  { to: "/runs", label: "Runs & Duyệt", icon: GitBranch, roles: ["CREDIT_APPROVER", "ADMIN", "AUDITOR"] },
+  { to: "/workflows", label: "Workflows", icon: Workflow, roles: ["CREDIT_APPROVER", "ADMIN"] },
+  { to: "/checklists", label: "Checklist", icon: ListChecks, roles: ["ADMIN"] },
+  { to: "/users", label: "Người dùng", icon: UserCog, roles: ["ADMIN"] },
+  { to: "/admin", label: "Hệ thống", icon: LayoutDashboard, roles: ["ADMIN"] },
+  { to: "/metrics", label: "Hiệu năng", icon: ChartNoAxesCombined, roles: ["CREDIT_APPROVER", "ADMIN", "AUDITOR"] },
 ];
 
 export const TopNav = () => {
-  const { role } = useSessionStore();
+  const { role, clearSession } = useSessionStore();
   const visibleItems = role ? NAV_ITEMS.filter(item => item.roles.includes(role)) : NAV_ITEMS;
+  const logout = () => {
+    clearSession();
+    // Hard navigation so the app remounts on a public route and the demo auto-login stays off.
+    window.location.assign("/landing");
+  };
   return (
   <header className={styles.header}>
     <div className={styles.inner}>
-      <Link to="/" className={styles.brand} aria-label="Về trang chủ">
+      <Link to="/landing" className={styles.brand} aria-label="Về trang giới thiệu">
         <span className={styles.mark}>
-          {/* NAT FIGURE geometric logo mark */}
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <rect x="2" y="2" width="7" height="7" rx="1.5" fill="currentColor" opacity="1"/>
-            <rect x="11" y="2" width="7" height="7" rx="1.5" fill="currentColor" opacity="0.55"/>
-            <rect x="2" y="11" width="7" height="7" rx="1.5" fill="currentColor" opacity="0.55"/>
-            <rect x="11" y="11" width="7" height="7" rx="1.5" fill="currentColor" opacity="0.25"/>
+          {/* NAT FIGURE premium geometric logo mark */}
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M12 2L2 12L12 22L22 12L12 2Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/>
+            <path d="M12 6L6 12L12 18L18 12L12 6Z" fill="currentColor" opacity="0.35"/>
+            <circle cx="12" cy="12" r="2.5" fill="currentColor"/>
           </svg>
         </span>
         <span>
-          <strong>NAT FIGURE</strong>
-          <small>VAIC 2026</small>
+          <strong>VAIC 2026</strong>
+          <small>Nat Figure</small>
         </span>
       </Link>
 
@@ -48,10 +57,17 @@ export const TopNav = () => {
         ))}
       </nav>
 
-      <Link to="/login" className={styles.homeLink}>
-        <UserRound size={15} />
-        <span>Đổi phiên</span>
-      </Link>
+      <div className={styles.actions}>
+        <NotificationBell />
+        <Link to="/login" className={styles.homeLink}>
+          <UserRound size={15} />
+          <span>Đổi phiên</span>
+        </Link>
+        <button type="button" onClick={logout} className={styles.logoutBtn}>
+          <LogOut size={15} />
+          <span>Đăng xuất</span>
+        </button>
+      </div>
     </div>
   </header>
   );

@@ -81,6 +81,26 @@ export interface CustomerDossierSummary {
   dossierId: string;
   status: CustomerDossierStatus;
   statusLabel: string;
+  loanType: LoanType;
+  createdAt: string;
+}
+
+export interface CustomerDossierDocument {
+  documentType: string;
+  displayName: string;
+  status: DocumentStatus;
+  originalFilename: string;
+  uploadedAt: string;
+  formRejectReason: string | null;
+}
+
+export interface CustomerDossierDetail {
+  isCustomerView: true;
+  dossier: CustomerDossierSummary;
+  loanType: LoanType;
+  completeness: DossierCompletenessResult;
+  documents: CustomerDossierDocument[];
+  approvedProduct: string | null;
 }
 
 export interface DossierDocument {
@@ -153,5 +173,6 @@ export interface DossierReviewDecisionRecord {
   reviewer: string;
   decision: ReviewDecision;
   comment: string | null;
+  productTerms: string | null;
   decidedAt: string;
 }

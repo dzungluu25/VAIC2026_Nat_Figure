@@ -13,12 +13,52 @@ import {
   documentStatusLabel, documentStatusTone, documentTypeLabel,
   dossierStatusLabel, dossierStatusTone, humanizeFieldKey, loanTypeLabel,
 } from "../features/dossier/dossierStatus";
-import { isCustomerDossierSummary, type DossierDetail, type ReviewDecision } from "../types/document-intake";
+import { isCustomerDossierDetail, isCustomerDossierSummary, type DossierDetail, type ReviewDecision } from "../types/document-intake";
+import { CustomerDossierView } from "../features/dossier/CustomerDossierView";
+import { getRunTraces } from "../services/orchestrationService";
+import { AnomalyInsightsSection } from "../features/chat/FinalAnswerPanel";
+import { deriveStepKey, stepTemplateForRiskTier, type StepKey, STEP_LABELS, STEP_AGENT } from "../utils/parseAgentState";
+import type { PipelineStep, StepStatus } from "../store/orchestrationStore";
+import type { AgentTrace, RiskTier } from "../types/api";
 import styles from "./DossierDetailPage.module.css";
 
 const AUDIT_ROLES = new Set(["CREDIT_APPROVER", "ADMIN", "AUDITOR"]);
 
-export const DossierDetailPage = () => {
+const processedStatusForTrace = (trace: AgentTrace): StepStatus => {
+  if (trace.executionStatus === "skipped_by_policy") return "skipped";
+  if (trace.executionStatus === "degraded") return "degraded";
+  if (trace.executionStatus === "terminal_failure" || trace.status === "failed" || trace.status === "blocked") return "failed";
+  return "done";
+};
+
+const buildStepsFromTraces = (traces: AgentTrace[], riskTier: RiskTier | undefined) => {
+  const stepsMap = new Map<StepKey, PipelineStep>();
+  const template = stepTemplateForRiskTier(riskTier);
+  template.forEach(key => {
+    stepsMap.set(key, {
+      key,
+      label: STEP_LABELS[key],
+      agent: STEP_AGENT[key],
+      status: "pending",
+    });
+  });
+
+  traces.forEach(trace => {
+    const key = deriveStepKey(trace);
+    const completedStatus = processedStatusForTrace(trace);
+    stepsMap.set(key, {
+      key,
+      label: STEP_LABELS[key] || key,
+      agent: trace.agent,
+      status: completedStatus,
+      trace,
+    });
+  });
+
+  return Array.from(stepsMap.values());
+};
+
+const OfficerDossierView = () => {
   const { id } = useParams<{ id: string }>();
   const { accessToken, role } = useSessionStore();
   const activeRole = role ?? "CREDIT_OFFICER";
@@ -43,6 +83,8 @@ export const DossierDetailPage = () => {
   const [documentUploadError, setDocumentUploadError] = useState<string | null>(null);
   const [targetOfficerId, setTargetOfficerId] = useState("");
   const [reassigning, setReassigning] = useState(false);
+  const [productTerms, setProductTerms] = useState("");
+  const [runSteps, setRunSteps] = useState<PipelineStep[]>([]);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -50,7 +92,26 @@ export const DossierDetailPage = () => {
     setError(null);
     try {
       const token = await getAccessToken();
-      setDetail(await getDossierDetail(token, id));
+      const dossierDetail = await getDossierDetail(token, id);
+      setDetail(dossierDetail);
+
+      if (dossierDetail && !isCustomerDossierSummary(dossierDetail) && !isCustomerDossierDetail(dossierDetail)) {
+        const runId = dossierDetail.dossier.runId;
+        if (runId) {
+          try {
+            const runData = await getRunTraces(runId, token);
+            if (runData && runData.traces) {
+              const isComplex = runData.traces.some(t => t.agent === "legal");
+              const tier: RiskTier = isComplex ? "COMPLEX" : "FAST";
+              const steps = buildStepsFromTraces(runData.traces, tier);
+              setRunSteps(steps);
+            }
+          } catch (err) {
+            console.error("Failed to load run traces for dossier:", err);
+          }
+        }
+      }
+
       if (role && AUDIT_ROLES.has(role)) {
         try {
           const audit = await getDossierAudit(token, id);
@@ -75,12 +136,17 @@ export const DossierDetailPage = () => {
 
   const decide = async (decision: ReviewDecision) => {
     if (!id) return;
+    if (decision === "approved" && !productTerms.trim()) {
+      setError("Vui lòng nhập sản phẩm vay & điều khoản trước khi duyệt (sẽ gửi cho khách hàng).");
+      return;
+    }
     setSubmitting(decision);
     setError(null);
     try {
       const token = await getAccessToken();
-      await submitReviewDecision(token, id, decision, comment.trim() || undefined);
+      await submitReviewDecision(token, id, decision, comment.trim() || undefined, productTerms.trim() || undefined);
       setComment("");
+      setProductTerms("");
       await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Không thể ghi nhận quyết định.");
@@ -179,6 +245,8 @@ export const DossierDetailPage = () => {
       </>
     );
   }
+  // Customers are dispatched to CustomerDossierView by DossierDetailPage; unreachable here.
+  if (isCustomerDossierDetail(detail)) return null;
   const { dossier, documents, completeness, cicReport, scoring, assignedOfficer, reviewDecisions } = detail;
   const dossierFinalized = dossier.status === "APPROVED" || dossier.status === "REJECTED";
   const uploadAllowedStatuses = new Set(["COLLECTING", "INCOMPLETE", "NEEDS_MORE_INFO"]);
@@ -198,6 +266,12 @@ export const DossierDetailPage = () => {
       />
 
       {error ? <p className={styles.error}>{error}</p> : null}
+
+      {runSteps.length > 0 && (
+        <div style={{ marginBottom: "20px" }}>
+          <AnomalyInsightsSection steps={runSteps} />
+        </div>
+      )}
 
       <div className={styles.grid}>
         <Card title="Checklist">
@@ -326,6 +400,9 @@ export const DossierDetailPage = () => {
                   <Badge tone={documentStatusTone[doc.status]}>{documentStatusLabel[doc.status]}</Badge>
                 </div>
                 <span className={styles.documentMeta}>{doc.originalFilename} · {new Date(doc.uploadedAt).toLocaleString("vi-VN")}</span>
+                {doc.formRejectReason ? (
+                  <p className={styles.formRejectReason}>{doc.formRejectReason}</p>
+                ) : null}
                 {doc.ocrResult ? (
                   <div className={styles.fieldGrid}>
                     {Object.entries(doc.ocrResult.extractedFields).map(([key, value]) => (
@@ -351,12 +428,21 @@ export const DossierDetailPage = () => {
 
       {dossier.status === "PENDING_REVIEW" && (activeRole === "CREDIT_OFFICER" || activeRole === "CREDIT_APPROVER") ? (
         <Card title="Quyết định của chuyên viên">
+          <label className={styles.decisionLabel}>Sản phẩm vay & điều khoản <span className={styles.required}>(bắt buộc khi duyệt — sẽ gửi cho khách qua thông báo & email)</span></label>
           <textarea
             className={styles.commentBox}
-            placeholder="Ghi chú / lý do (không bắt buộc)"
+            placeholder="VD: Vay tín chấp 200 triệu, kỳ hạn 24 tháng, lãi suất 14%/năm, giải ngân trong 3 ngày làm việc."
+            value={productTerms}
+            onChange={e => setProductTerms(e.target.value)}
+            rows={3}
+          />
+          <label className={styles.decisionLabel}>Ghi chú nội bộ / lý do (không bắt buộc)</label>
+          <textarea
+            className={styles.commentBox}
+            placeholder="Ghi chú / lý do"
             value={comment}
             onChange={e => setComment(e.target.value)}
-            rows={3}
+            rows={2}
           />
           <div className={styles.actionRow}>
             <Button variant="primary" isLoading={submitting === "approved"} disabled={!!submitting} onClick={() => decide("approved")}>
@@ -379,6 +465,7 @@ export const DossierDetailPage = () => {
               <li key={decision.id}>
                 <strong>{decision.reviewer}</strong> — {decision.decision === "approved" ? "Duyệt" : decision.decision === "rejected" ? "Từ chối" : "Yêu cầu bổ sung"}
                 <span className={styles.decisionMeta}>{new Date(decision.decidedAt).toLocaleString("vi-VN")}</span>
+                {decision.productTerms ? <p className={styles.decisionProduct}><strong>Sản phẩm vay:</strong> {decision.productTerms}</p> : null}
                 {decision.comment ? <p className={styles.decisionComment}>{decision.comment}</p> : null}
               </li>
             ))}
@@ -409,4 +496,10 @@ export const DossierDetailPage = () => {
       ) : null}
     </>
   );
+};
+
+/** Route entry: customers get the self-service intake view; staff get the full reviewer view. */
+export const DossierDetailPage = () => {
+  const { role } = useSessionStore();
+  return role === "CUSTOMER" ? <CustomerDossierView /> : <OfficerDossierView />;
 };

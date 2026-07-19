@@ -5,6 +5,7 @@ import { evaluateCreditRules } from "../rules/credit-rule-engine";
 import { queryProjectGuarantee, queryRegulationClause } from "../rag/policy-rag.service";
 import { estimateCreditRisk } from "../tools/ml-credit-risk.tool";
 import { calculateIncomeAfterHaircut, calculateCurrentMonthlyDebt } from "../calculators/dti.calculator";
+import { calculateEmi } from "../calculators/emi.calculator";
 import { projectBusinessValue } from "../business/profitability-engine";
 
 const jsonContent = (value: unknown, isError = false) => ({
@@ -87,15 +88,36 @@ export const buildCreditToolServer = (tenantId = "bank-default"): McpServer => {
       const retailCase = await loadRetailCase(caseId, tenantId);
       if (!retailCase) return jsonContent({ found: false }, true);
       try {
+        const validIncome = calculateIncomeAfterHaircut(retailCase.incomeSources) || 1;
+        const currentMonthlyDebt = calculateCurrentMonthlyDebt(retailCase.currentDebts);
+        const emi = calculateEmi(retailCase.requestedLoan.amount, 0.14, retailCase.requestedLoan.tenureYears);
+
+        const currentDti = Number((currentMonthlyDebt / validIncome).toFixed(4));
+        const stressDti = Number(((currentMonthlyDebt + emi) / validIncome).toFixed(4));
+        const requestedLtv = retailCase.property.value > 0 ? Number((retailCase.requestedLoan.amount / retailCase.property.value).toFixed(4)) : 0;
+
         const result = await estimateCreditRisk(caseId, {
-          age: retailCase.demographic.age,
-          maritalStatus: retailCase.demographic.maritalStatus,
-          requestedLoanAmount: retailCase.requestedLoan.amount,
-          requestedTenureYears: retailCase.requestedLoan.tenureYears,
-          propertyValue: retailCase.property.value,
-          propertyStatus: retailCase.property.status,
-          incomeAfterHaircut: calculateIncomeAfterHaircut(retailCase.incomeSources),
-          currentMonthlyDebt: calculateCurrentMonthlyDebt(retailCase.currentDebts),
+          age_years: retailCase.demographic.age,
+          monthly_income_vnd: validIncome,
+          income_volatility_6m: 0.1,
+          employment_tenure_months: 24,
+          bureau_history_months: 36,
+          cic_dpd_12m_max: 0,
+          cic_inquiries_6m: 0,
+          credit_utilization: 0.1,
+          current_dti: Math.max(0, Math.min(3.0, currentDti)),
+          requested_amount_vnd: retailCase.requestedLoan.amount,
+          requested_tenure_months: retailCase.requestedLoan.tenureYears * 12,
+          collateral_value_vnd: retailCase.property.value,
+          requested_ltv: Math.max(0, Math.min(5.0, requestedLtv)),
+          stress_dti: Math.max(0, Math.min(5.0, stressDti)),
+          bank_relationship_months: 12,
+          transaction_cashflow_coverage: 2.0,
+          employment_type: "salaried",
+          income_verification: "bank_statement",
+          loan_purpose: "home",
+          collateral_type: "property",
+          region_risk_band: "low",
         });
         return jsonContent(result);
       } catch (error) {

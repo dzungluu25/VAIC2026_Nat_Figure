@@ -233,8 +233,12 @@ const CUSTOMER_STATUS: Record<DossierStatus, { status: CustomerDossierSummary["s
   REJECTED: { status: "TU_CHOI", statusLabel: "Từ chối" },
 };
 
-export const toCustomerDossierSummary = (dossier: Pick<LoanDossier, "dossierId" | "status">): CustomerDossierSummary => ({
+export const toCustomerDossierSummary = (
+  dossier: Pick<LoanDossier, "dossierId" | "status" | "loanType" | "createdAt">
+): CustomerDossierSummary => ({
   dossierId: dossier.dossierId,
+  loanType: dossier.loanType,
+  createdAt: dossier.createdAt,
   ...CUSTOMER_STATUS[dossier.status],
 });
 
@@ -255,12 +259,12 @@ export const listDossiers = async (
     params.push(context.userId);
     conditions.push(`a.assigned_officer=$${params.length}`);
   }
-  const select = context.role === "CUSTOMER" ? "d.dossier_id,d.status" : "d.*";
+  const select = context.role === "CUSTOMER" ? "d.dossier_id,d.status,d.loan_type,d.created_at" : "d.*";
   const result = await pgQuery(
     `SELECT ${select} FROM loan_dossiers d ${join} WHERE ${conditions.join(" AND ")} ORDER BY d.updated_at DESC`,
     params
   );
   return context.role === "CUSTOMER"
-    ? result.rows.map(row => toCustomerDossierSummary({ dossierId: row.dossier_id, status: row.status }))
+    ? result.rows.map(row => toCustomerDossierSummary({ dossierId: row.dossier_id, status: row.status, loanType: row.loan_type, createdAt: row.created_at }))
     : result.rows.map(toDossier);
 };

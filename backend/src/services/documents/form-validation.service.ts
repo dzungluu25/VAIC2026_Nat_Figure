@@ -27,6 +27,15 @@ export const checkFormMarkers = (ocrText: string, checklistItem: ChecklistDocume
   };
 };
 
+/** Latest form-validation reason for a document (null when it passed or was never validated). */
+export const getLatestFormRejectReason = async (tenantId: string, documentId: string): Promise<string | null> => {
+  const result = await pgQuery(
+    `SELECT reason FROM document_form_validation_log WHERE tenant_id=$1 AND document_id=$2 ORDER BY checked_at DESC LIMIT 1`,
+    [tenantId, documentId]
+  );
+  return result.rows[0]?.reason ?? null;
+};
+
 export const persistFormValidationResult = async (
   tenantId: string,
   documentId: string,

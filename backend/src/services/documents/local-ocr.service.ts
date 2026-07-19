@@ -3,6 +3,7 @@ import { mkdtemp, readdir, rm, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import path from "path";
 import { config } from "../../config/env";
+import { DOCX_MIME_TYPE, extractDocxText } from "./docx-text.service";
 
 export interface DocumentOcrResult {
   text: string;
@@ -107,11 +108,19 @@ const convertPdfToImages = async (pdfPath: string, workDir: string): Promise<str
 };
 
 /**
- * Free, local OCR for Vietnamese/English images and PDFs. Tesseract returns word confidence in TSV;
- * PDFs are rendered to images first because Tesseract does not read PDF input directly.
+ * Free, local text extraction for the intake pipeline. Images/PDFs go through Tesseract (word
+ * confidence from TSV; PDFs are rasterised first because Tesseract does not read PDF directly).
+ * .docx uploads (the mau_don templates) carry machine-readable text, so they are read natively with
+ * full confidence instead of being OCR'd.
  */
 export const runDocumentOcr = async (buffer: Buffer, mimeType: string): Promise<DocumentOcrResult> => {
   const normalizedMimeType = mimeType.toLowerCase().split(";")[0].trim();
+
+  if (normalizedMimeType === DOCX_MIME_TYPE) {
+    // Native text: exact, not OCR'd — report full confidence so field extraction trusts it.
+    return { text: extractDocxText(buffer), averageConfidence: 1 };
+  }
+
   const isPdf = normalizedMimeType === "application/pdf";
   const imageExtension = IMAGE_EXTENSIONS[normalizedMimeType];
   if (!isPdf && !imageExtension) throw new Error(`LOCAL_OCR_UNSUPPORTED_MIME_TYPE: ${mimeType}`);

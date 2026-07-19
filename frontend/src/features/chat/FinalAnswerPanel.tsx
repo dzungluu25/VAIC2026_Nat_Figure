@@ -130,6 +130,140 @@ const EvidenceClaims = ({ transparency }: { transparency: AnswerTransparency }) 
   );
 };
 
+interface AnomalyInfo {
+  agent: string;
+  code: string;
+  title: string;
+  reason: string;
+  method: string;
+  isDanger?: boolean;
+}
+
+export const AnomalyInsightsSection = ({ steps }: { steps: PipelineStep[] }) => {
+  const anomalies: AnomalyInfo[] = [];
+
+  const fraudStep = steps.find(s => s.key === "fraud");
+  if (fraudStep && (fraudStep.status === "failed" || fraudStep.status === "blocked")) {
+    const summary = fraudStep.trace?.summary || "";
+    const findings = fraudStep.trace?.findings || [];
+    const hasRule = (ruleId: string) => 
+      findings.some(f => f.ruleIds?.includes(ruleId)) || summary.includes(ruleId);
+
+    if (hasRule("FRAUD_AGE_TENURE_MISMATCH") || summary.includes("ageTenureMismatch") || summary.includes("AGE_TENURE_MISMATCH")) {
+      anomalies.push({
+        agent: "Fraud Investigation Agent",
+        code: "FRAUD_AGE_TENURE_MISMATCH",
+        title: "Bất tương thích Tuổi và Kỳ hạn vay",
+        reason: "Tuổi hiện tại của khách hàng cộng với kỳ hạn vay vượt quá độ tuổi lao động quy định (65 tuổi). Điều này gây rủi ro cao về khả năng trả nợ khi nguồn thu nhập từ lao động chính bị suy giảm trong các năm cuối của khoản vay.",
+        method: "Quy tắc tuyến tính xác định (Linear Age-Maturity check) đối chiếu tuổi từ hồ sơ khách hàng với kỳ hạn khoản vay đề xuất.",
+        isDanger: true,
+      });
+    }
+
+    if (hasRule("FRAUD_COLLATERAL_VALUE_OUTLIER") || summary.includes("collateralValueOutlier") || summary.includes("COLLATERAL_VALUE_OUTLIER")) {
+      anomalies.push({
+        agent: "Fraud Investigation Agent",
+        code: "FRAUD_COLLATERAL_VALUE_OUTLIER",
+        title: "Dị thường định giá Tài sản thế chấp",
+        reason: "Giá trị tài sản thế chấp cao bất thường so với dư nợ khoản vay (vượt ngưỡng cảnh báo an toàn). Dấu hiệu này thường cảnh báo rủi ro thổi phồng giá trị tài sản để lách chính sách LTV tối đa hoặc vay hộ.",
+        method: "Thuật toán định lượng (Deterministic Outlier Check) tính toán tỷ lệ tài sản/khoản vay so với trần quy định.",
+      });
+    }
+
+    if (hasRule("FRAUD_EVIDENCE_INCONSISTENCY") || summary.includes("evidenceInconsistency") || summary.includes("EVIDENCE_INCONSISTENCY")) {
+      anomalies.push({
+        agent: "Fraud Investigation Agent",
+        code: "FRAUD_EVIDENCE_INCONSISTENCY",
+        title: "Trùng lặp bằng chứng tài liệu tài chính",
+        reason: "Nhiều nguồn thu nhập độc lập nhưng lại sử dụng chung một tài liệu chứng minh tài chính (trùng băm hoặc trùng nội dung), gợi ý hành vi sao chép hồ sơ hoặc ngụy tạo tài liệu.",
+        method: "Thuật toán so khớp chuỗi chéo (Cross-hash/string checking) quét toàn bộ tệp đính kèm thu nhập.",
+        isDanger: true,
+      });
+    }
+
+    if (hasRule("FRAUD_INCOME_DEBT_MISMATCH") || summary.includes("incomeDebtMismatch") || summary.includes("INCOME_DEBT_MISMATCH")) {
+      anomalies.push({
+        agent: "Fraud Investigation Agent",
+        code: "FRAUD_INCOME_DEBT_MISMATCH",
+        title: "Bất tương thích Dư nợ và Thu nhập",
+        reason: "Tổng dư nợ hiện tại vượt quá nhiều lần so với thu nhập hợp lệ hàng tháng (vượt trần tỷ lệ cho phép), cảnh báo rủi ro mất khả năng thanh toán.",
+        method: "Thuật toán tính toán tỷ lệ tổng dư nợ hiện hữu trên thu nhập sau haircut.",
+        isDanger: true,
+      });
+    }
+  }
+
+  const legalStep = steps.find(s => s.key === "legal");
+  if (legalStep) {
+    const summary = legalStep.trace?.summary || "";
+    const findings = legalStep.trace?.findings || [];
+    const hasRule = (ruleId: string) => 
+      findings.some(f => f.ruleIds?.includes(ruleId)) || summary.includes(ruleId);
+
+    if (legalStep.status === "failed" && (summary.includes("Legal compliance reasoning failed") || summary.includes("failed"))) {
+      anomalies.push({
+        agent: "Legal & Compliance Agent",
+        code: "LEGAL_REASONING_FAILED",
+        title: "Lỗi kiểm duyệt Pháp chế tự động",
+        reason: "Mô hình ngôn ngữ lớn (LLM) hoặc hệ thống GraphRAG gặp sự cố kết nối/xác thực (Mã lỗi 401). Hệ thống không thể tự động rà soát pháp lý cho hồ sơ, dẫn đến việc ngắt mạch an toàn để chuyển sang soát xét thủ công.",
+        method: "Bộ xử lý lỗi tự động (Orchestration Circuit Breaker) kích hoạt chế độ Fail-closed khi có Agent trọng yếu gặp sự cố.",
+        isDanger: true,
+      });
+    }
+
+    if (hasRule("LEGAL_INSURANCE_TYING_DETECTED") || summary.includes("bán chéo") || summary.includes("insuranceTyingApplied")) {
+      anomalies.push({
+        agent: "Legal & Compliance Agent",
+        code: "LEGAL_INSURANCE_TYING_DETECTED",
+        title: "Bán chéo Bảo hiểm ép buộc (Insurance Tying)",
+        reason: "Thiết lập lãi suất ưu đãi (7.5%) gắn liền với việc ép buộc mua bảo hiểm nhân thọ phụ trợ, vi phạm quy định bảo vệ người tiêu dùng của Ngân hàng Nhà nước và chính sách an toàn pháp lý của hệ thống.",
+        method: "Mô hình AI suy luận ngữ nghĩa (NLP Reasoning) phân tích cấu trúc gói sản phẩm định giá chéo.",
+        isDanger: true,
+      });
+    }
+
+    if (summary.includes("chữ ký vợ") || summary.includes("chữ ký chồng") || summary.includes("hôn nhân") || summary.includes("thiếu chữ ký")) {
+      anomalies.push({
+        agent: "Legal & Compliance Agent",
+        code: "LEGAL_MARITAL_SIGNATURE_MISSING",
+        title: "Thiếu chữ ký đồng sở hữu của Vợ/Chồng",
+        reason: "Khách hàng có trạng thái Đã kết hôn thế chấp tài sản chung nhưng hồ sơ thiếu chữ ký xác nhận của vợ/chồng, dẫn đến nguy cơ hợp đồng thế chấp bị tuyên vô hiệu pháp luật.",
+        method: "Bộ lọc biểu thức chính quy (Regex: thiếu chữ ký) kết hợp suy luận ngữ cảnh trạng thái hôn nhân.",
+        isDanger: true,
+      });
+    }
+  }
+
+  if (anomalies.length === 0) return null;
+
+  return (
+    <section className={styles.anomalySection} aria-label="Báo cáo phân tích bất thường & Insights">
+      <div className={styles.anomalyHeader}>
+        <TriangleAlert size={16} />
+        <span>Báo cáo phân tích bất thường & Insights</span>
+      </div>
+      <div className={styles.anomalyList}>
+        {anomalies.map((anomaly, idx) => (
+          <div key={idx} className={styles.anomalyCard}>
+            <div className={styles.anomalyMeta}>
+              <span className={styles.anomalyAgent}>{anomaly.agent}</span>
+              <span className={[styles.anomalyCode, anomaly.isDanger ? styles.anomalyCodeDanger : undefined].filter(Boolean).join(" ")}>
+                {anomaly.code}
+              </span>
+            </div>
+            <h4 className={styles.anomalyTitle}>{anomaly.title}</h4>
+            <p className={styles.anomalyReason}>{anomaly.reason}</p>
+            <div className={styles.anomalyMethod}>
+              <Workflow size={11} />
+              <span>Phương pháp phát hiện: {anomaly.method}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+};
+
 export const FinalAnswerPanel = () => {
   const [savingRunId, setSavingRunId] = useState<string>();
   const [savedRunId, setSavedRunId] = useState<string>();
@@ -207,6 +341,8 @@ export const FinalAnswerPanel = () => {
       {response.terminalFailure && <TerminalFailureBanner failure={response.terminalFailure} />}
 
       {steps.length > 0 && <DecisionTrace steps={steps} reasoning={response.reasoning} terminalFailure={response.terminalFailure} />}
+
+      <AnomalyInsightsSection steps={steps} />
 
       {response.confidence?.status === "NEEDS_REVIEW" && (
         <div className={styles.errorBox} role="status">

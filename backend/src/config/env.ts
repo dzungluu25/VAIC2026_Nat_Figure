@@ -1,4 +1,5 @@
 import "./load-env";
+import path from "path";
 
 export const config = {
   port: process.env.PORT || 3000,
@@ -18,6 +19,8 @@ export const config = {
   fptLegalModel: process.env.LEGAL_LLM_MODEL || process.env.FPT_LEGAL_MODEL || process.env.FPT_MODEL || "GLM-5.1",
   fptPlannerModel: process.env.PLANNER_LLM_MODEL || process.env.FPT_PLANNER_MODEL || "DeepSeek-V4-Flash",
   fptExtractionModel: process.env.EXTRACTION_LLM_MODEL || process.env.FPT_EXTRACTION_MODEL || "DeepSeek-V4-Flash",
+  llmRequestTimeoutMs: Math.max(5_000, Math.min(120_000, Number(process.env.LLM_REQUEST_TIMEOUT_MS) || 20_000)),
+  llmMaxRetries: Math.max(0, Math.min(2, Number(process.env.LLM_MAX_RETRIES) || 0)),
   ocrLanguages: process.env.OCR_LANGUAGES || "vie+eng",
   ocrPdfDpi: Math.max(100, Math.min(400, Number(process.env.OCR_PDF_DPI) || 200)),
   ocrMaxPdfPages: Math.max(1, Math.min(50, Number(process.env.OCR_MAX_PDF_PAGES) || 10)),
@@ -27,4 +30,6 @@ export const config = {
   gmailSmtpAppPassword: process.env.GMAIL_SMTP_APP_PASSWORD || "",
   gmailSenderName: process.env.GMAIL_SENDER_NAME || "SHB VAIC Credit Ops",
   supabaseStorageBucket: process.env.SUPABASE_STORAGE_BUCKET || "loan-documents",
+  documentStorageDriver: (process.env.DOCUMENT_STORAGE_DRIVER || "").toLowerCase(),
+  localDocumentStorageDir: process.env.LOCAL_DOCUMENT_STORAGE_DIR || path.resolve(process.cwd(), "uploads"),
 };
