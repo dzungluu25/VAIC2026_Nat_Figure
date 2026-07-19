@@ -58,7 +58,7 @@ export const AdminPage = () => {
     <>
       <Header
         eyebrow="Quản trị hệ thống"
-        title="Tools · Bảo trì · Vận hành"
+        title="Công cụ · Bảo trì · Vận hành"
         subtitle={data ? `Cập nhật: ${new Date(data.generatedAt).toLocaleString("vi-VN")}` : "Tình trạng dịch vụ, công cụ, phiên bản và thống kê."}
         action={<Button variant="secondary" isLoading={loading} onClick={load}><RefreshCw size={14} /> Làm mới</Button>}
       />

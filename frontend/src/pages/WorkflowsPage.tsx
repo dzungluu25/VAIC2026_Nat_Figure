@@ -117,8 +117,8 @@ export const WorkflowsPage = () => {
     <>
       <Header
         eyebrow="Quản trị vận hành"
-        title="Workflow registry"
-        subtitle={`Định nghĩa, kiểm tra và phát hành phiên bản workflow. Phiên: ${role ?? "?"} · tenant ${tenantId}`}
+        title="Danh mục quy trình"
+        subtitle={`Định nghĩa, kiểm tra và phát hành phiên bản quy trình. Phiên: ${role ?? "?"} · đơn vị ${tenantId}`}
         action={<Badge tone="brand"><ShieldCheck size={13} /> RBAC enforced</Badge>}
       />
       <Card title="Định nghĩa & phát hành" action={<Workflow size={16} />}>

@@ -73,8 +73,8 @@ export const ChecklistAdminPage = () => {
     <>
       <Header
         eyebrow="Quản trị vận hành"
-        title="Phiên bản checklist giấy tờ"
-        subtitle={`Quản lý bộ giấy tờ bắt buộc theo loại vay. Phiên: ${role ?? "?"} · tenant ${tenantId}`}
+        title="Phiên bản danh sách kiểm tra giấy tờ"
+        subtitle={`Quản lý bộ giấy tờ bắt buộc theo loại vay. Phiên: ${role ?? "?"} · đơn vị ${tenantId}`}
         action={<Badge tone="brand"><ShieldCheck size={13} /> RBAC enforced</Badge>}
       />
       <Card title="Đọc, sửa & phát hành checklist" action={<Save size={16} />}>

@@ -44,7 +44,7 @@ export const UsersPage = () => {
       <Header
         eyebrow="Quản trị vận hành"
         title="Người dùng & phân quyền"
-        subtitle={`Gán role cho tài khoản trong tenant. Phiên: ${role ?? "?"} · tenant ${tenantId}`}
+        subtitle={`Gán vai trò cho tài khoản trong đơn vị. Phiên: ${role ?? "?"} · đơn vị ${tenantId}`}
         action={<Badge tone="brand"><ShieldCheck size={13} /> RBAC enforced</Badge>}
       />
       <Card title="Đổi role người dùng" action={<UserCog size={16} />}>

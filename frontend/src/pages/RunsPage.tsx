@@ -72,8 +72,8 @@ export const RunsPage = () => {
     <>
       <Header
         eyebrow="Quản trị vận hành"
-        title="Runs, phê duyệt & audit"
-        subtitle={`Tra cứu run, quyết định human-gate và xem nhật ký kiểm toán. Phiên: ${role ?? "?"} · tenant ${tenantId}`}
+        title="Lần chạy, phê duyệt và kiểm toán"
+        subtitle={`Tra cứu lần chạy, quyết định qua cổng phê duyệt thủ công và xem nhật ký kiểm toán. Phiên: ${role ?? "?"} · đơn vị ${tenantId}`}
         action={<Badge tone="brand"><ShieldCheck size={13} /> RBAC enforced</Badge>}
       />
       <Card title="Tra cứu & quyết định run" action={<History size={16} />}>

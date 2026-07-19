@@ -18,9 +18,9 @@ export const DashboardPage = () => {
   return (
     <>
       <Header
-        eyebrow="Retail credit - NAT FIGURE"
-        title="Loan file appraisal"
-        subtitle="Enter a customer request and monitor the multi-agent workflow as it extracts risks, validates policy, and prepares the appraisal decision."
+        eyebrow="Tín dụng bán lẻ - NAT FIGURE"
+        title="Thẩm định hồ sơ vay"
+        subtitle="Nhập yêu cầu của khách hàng và theo dõi quy trình đa tác tử khi hệ thống nhận diện rủi ro, kiểm tra chính sách và chuẩn bị quyết định thẩm định."
       />
 
       <div className={styles.summaryBar}>

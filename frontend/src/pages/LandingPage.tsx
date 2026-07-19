@@ -16,11 +16,11 @@ const agents = [
 ];
 
 const features = [
-  { icon: Network, tag: "Orchestration", title: "7 AI agents. Một state graph.", text: "Planner chọn Fast hoặc Complex lane; từng specialist chỉ xử lý đúng contract và quyền hạn được cấp.", className: "featureWide", accent: "mint" },
-  { icon: ScanSearch, tag: "Decision engine", title: "Phép tính không giao cho LLM", text: "DTI, LTV, EMI, stress test và tái cấu trúc chạy bằng rule engine xác định, có policy version.", className: "", accent: "blue" },
-  { icon: BookOpenCheck, tag: "Grounded legal", title: "Citation có nguồn", text: "Legal Agent truy vấn GraphRAG, sau đó citation governance chỉ cho phép nguồn nằm trong catalog đã kiểm chứng.", className: "", accent: "amber" },
+  { icon: Network, tag: "Orchestration", title: "7 tác tử AI. Một đồ thị trạng thái.", text: "Planner chọn Fast hoặc Complex lane; từng specialist chỉ xử lý đúng contract và quyền hạn được cấp.", className: "featureWide", accent: "mint" },
+  { icon: ScanSearch, tag: "Decision engine", title: "Phép tính không giao cho mô hình ngôn ngữ", text: "DTI, LTV, EMI, stress test và tái cấu trúc chạy bằng rule engine xác định, có policy version.", className: "", accent: "blue" },
+  { icon: BookOpenCheck, tag: "Grounded legal", title: "Trích dẫn có nguồn", text: "Legal Agent truy vấn GraphRAG, sau đó citation governance chỉ cho phép nguồn nằm trong catalog đã kiểm chứng.", className: "", accent: "amber" },
   { icon: RefreshCw, tag: "Self-correction", title: "Tự sửa xung đột", text: "Phát hiện insurance tying sẽ kích hoạt vòng định giá lại và chạy lại compliance trước khi ra quyết định.", className: "", accent: "violet" },
-  { icon: ShieldCheck, tag: "Fail-closed", title: "Không chắc chắn? Không phán quyết.", text: "Thiếu evidence, tool lỗi hoặc confidence thấp sẽ trả NEEDS_REVIEW và xoá toàn bộ approved terms.", className: "featureWide", accent: "coral" },
+  { icon: ShieldCheck, tag: "Fail-closed", title: "Không chắc chắn? Không đưa ra quyết định.", text: "Thiếu evidence, tool lỗi hoặc confidence thấp sẽ trả NEEDS_REVIEW và xoá toàn bộ approved terms.", className: "featureWide", accent: "coral" },
 ];
 
 const controls = [

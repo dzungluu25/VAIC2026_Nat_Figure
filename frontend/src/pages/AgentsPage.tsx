@@ -16,9 +16,9 @@ export const AgentsPage = () => {
   return (
     <>
       <Header
-        eyebrow="Orchestration observability"
-        title="Agent workflow monitor"
-        subtitle="Inspect the state graph, tool calls, decisions, skipped stages, degraded stages, and fail-closed stops for each appraisal run."
+        eyebrow="Theo dõi điều phối"
+        title="Giám sát quy trình tác tử"
+        subtitle="Kiểm tra đồ thị trạng thái, các lệnh gọi công cụ, quyết định, các giai đoạn bị bỏ qua, suy giảm và các điểm dừng an toàn của từng lần thẩm định."
       />
       <div className={styles.stats}>
         <div><Activity size={17} /><span><small>Status</small><strong>{phaseLabel}</strong></span></div>
