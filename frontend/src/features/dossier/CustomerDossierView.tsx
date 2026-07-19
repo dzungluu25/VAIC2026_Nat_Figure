@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, CircleAlert, FileCheck2 } from "lucide-react";
+import { ArrowLeft, CircleAlert, FileCheck2, Download, FileText, FolderArchive } from "lucide-react";
 import { Header } from "../../layouts/Header";
 import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
@@ -94,13 +94,86 @@ export const CustomerDossierView = () => {
       </Card>
 
       {canUpload ? (
-        <Card title="Nộp / bổ sung giấy tờ">
-          <DocumentUploadPanel
-            dossierId={dossier.dossierId}
-            targets={completeness.missingDocumentTypes}
-            onUploaded={load}
-          />
-        </Card>
+        <>
+          <Card title="Tải biểu mẫu tài liệu (.docx)">
+            <div className={styles.templateList}>
+              <div className={styles.templateItem}>
+                <div className={styles.templateInfo}>
+                  <div className={styles.templateIcon}>
+                    <FileText size={24} />
+                  </div>
+                  <div>
+                    <span className={styles.templateName}>Đơn đề nghị vay vốn tín chấp kiêm HĐTD</span>
+                    <span className={styles.templateCode}>Mẫu số: 01/TC-KHCN</span>
+                  </div>
+                </div>
+                <a
+                  href="/templates/Mau-01-Don-vay-tin-chap.docx"
+                  download="Mau-01-Don-vay-tin-chap.docx"
+                  className={styles.downloadLink}
+                >
+                  <Download size={14} /> Tải xuống
+                </a>
+              </div>
+
+              <div className={styles.templateItem}>
+                <div className={styles.templateInfo}>
+                  <div className={styles.templateIcon}>
+                    <FileText size={24} />
+                  </div>
+                  <div>
+                    <span className={styles.templateName}>Đơn đề nghị vay vốn thế chấp kiêm PATN</span>
+                    <span className={styles.templateCode}>Mẫu số: 02/TC-KHCN</span>
+                  </div>
+                </div>
+                <a
+                  href="/templates/Mau-02-Don-vay-the-chap.docx"
+                  download="Mau-02-Don-vay-the-chap.docx"
+                  className={styles.downloadLink}
+                >
+                  <Download size={14} /> Tải xuống
+                </a>
+              </div>
+
+              <div className={styles.templateItem}>
+                <div className={styles.templateInfo}>
+                  <div className={styles.templateIcon}>
+                    <FileText size={24} />
+                  </div>
+                  <div>
+                    <span className={styles.templateName}>Giấy xác nhận thu nhập</span>
+                    <span className={styles.templateCode}>Mẫu số: 03/TC-KHCN</span>
+                  </div>
+                </div>
+                <a
+                  href="/templates/Mau-03-Giay-xac-nhan-thu-nhap.docx"
+                  download="Mau-03-Giay-xac-nhan-thu-nhap.docx"
+                  className={styles.downloadLink}
+                >
+                  <Download size={14} /> Tải xuống
+                </a>
+              </div>
+            </div>
+
+            <div className={styles.zipContainer}>
+              <a
+                href="/templates/Mau-Bieu-De-Nghi-Vay.zip"
+                download="Mau-Bieu-De-Nghi-Vay.zip"
+                className={styles.zipButton}
+              >
+                <FolderArchive size={16} /> Tải trọn bộ 3 biểu mẫu (ZIP)
+              </a>
+            </div>
+          </Card>
+
+          <Card title="Nộp / bổ sung giấy tờ">
+            <DocumentUploadPanel
+              dossierId={dossier.dossierId}
+              targets={completeness.missingDocumentTypes}
+              onUploaded={load}
+            />
+          </Card>
+        </>
       ) : null}
 
       <Card title={`Giấy tờ đã nộp (${documents.length})`}>
