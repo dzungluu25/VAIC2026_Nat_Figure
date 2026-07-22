@@ -1,4 +1,7 @@
 import { getNeo4jSession } from "../../config/neo4j";
+import { createLogger } from "../observability/logger";
+
+const logger = createLogger("rag.policy");
 
 export interface ProjectPolicyDetails {
   projectCode: string;
@@ -88,7 +91,7 @@ export const queryProjectGuarantee = async (projectCode: string): Promise<Projec
       lastVerifiedAt: record.get("lastVerifiedAt"),
     };
   } catch (error) {
-    console.error(`Neo4j GraphRAG: Failed to query project guarantee for ${projectCode}:`, error);
+    logger.error("Failed to query project guarantee", { projectCode, error });
     return null;
   } finally {
     await session.close();
@@ -169,7 +172,7 @@ export const queryRegulationClause = async (clauseId: string): Promise<Regulatio
       interpretations: record.get("interpretations"),
     };
   } catch (error) {
-    console.error(`Neo4j GraphRAG: Failed to query regulation clause ${clauseId}:`, error);
+    logger.error("Failed to query regulation clause", { clauseId, error });
     return null;
   } finally {
     await session.close();

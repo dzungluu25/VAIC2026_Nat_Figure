@@ -1,6 +1,9 @@
 import { createAiCompletion } from "../../config/ai-model-router";
 import { RetailCase } from "../../types/case.types";
 import { ChatCompletionTool, ChatCompletionMessageParam } from "openai/resources/chat/completions";
+import { createLogger } from "../observability/logger";
+
+const logger = createLogger("orchestration.case-extraction");
 
 const INCOME_TYPES = new Set(["salary", "freelance", "rental"]);
 const DEBT_TYPES = new Set(["auto", "credit_card", "other"]);
@@ -350,7 +353,7 @@ export const extractCaseFromPrompt = async (prompt: string): Promise<CaseExtract
           return { ok: true, retailCase: validateExtractedCase(structured) };
         }
       } catch (err: any) {
-        console.error("Structured case parsing/validation failed:", err);
+        logger.error("Structured case parsing/validation failed", { error: err });
         return {
           ok: false,
           missingFields: ["dữ liệu JSON hợp lệ"],
@@ -388,7 +391,7 @@ export const extractCaseFromPrompt = async (prompt: string): Promise<CaseExtract
 
     return EXTRACTION_UNAVAILABLE_RESULT;
   } catch (error) {
-    console.error("Case extraction failed, falling back to NEEDS_MORE_INFO:", error);
+    logger.error("Case extraction failed, falling back to NEEDS_MORE_INFO", { error });
     return EXTRACTION_UNAVAILABLE_RESULT;
   }
 };
@@ -621,7 +624,7 @@ export const extractDraftCaseFromPrompt = async (prompt: string): Promise<Record
     }
     return extractLocalDraftCaseFromPrompt(prompt);
   } catch (error) {
-    console.error("Draft extraction failed, falling back to local extractor:", error);
+    logger.error("Draft extraction failed, falling back to local extractor", { error });
     return extractLocalDraftCaseFromPrompt(prompt);
   }
 };

@@ -1,6 +1,9 @@
 import { RetailCase } from "../../types/case.types";
 import { pgPool, pgQuery } from "../../config/pg";
 import { assertPersistedRetailCase, validateRetailCase } from "./data-integrity.service";
+import { createLogger } from "../observability/logger";
+
+const logger = createLogger("data.retail-case-loader");
 
 /** Loads and runtime-validates a case before any agent is allowed to consume it. */
 export const loadRetailCase = async (caseId: string, tenantId = "bank-default"): Promise<RetailCase | undefined> => {
@@ -45,7 +48,7 @@ export const saveRetailCase = async (retailCase: RetailCase, tenantId = "bank-de
     try {
       await client.query("ROLLBACK");
     } catch (rollbackError) {
-      console.warn("RetailCase rollback failed; connection may already be closed:", rollbackError);
+      logger.warn("RetailCase rollback failed; connection may already be closed", { error: rollbackError });
     }
     throw error;
   } finally {

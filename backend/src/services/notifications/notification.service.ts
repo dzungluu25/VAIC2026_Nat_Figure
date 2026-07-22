@@ -1,6 +1,9 @@
 import { randomUUID } from "crypto";
 import { pgQuery } from "../../config/pg";
 import { AuthorizationContext } from "../../config/authorization";
+import { createLogger } from "../observability/logger";
+
+const logger = createLogger("notifications");
 
 export type NotificationCategory =
   | "MISSING_DOCUMENTS"
@@ -61,7 +64,7 @@ export const createNotification = async (input: CreateNotificationInput): Promis
       ]
     );
   } catch (error) {
-    console.error("Notification insert failed (non-fatal):", error instanceof Error ? error.message : error);
+    logger.error("Notification insert failed (non-fatal)", { error });
   }
 };
 

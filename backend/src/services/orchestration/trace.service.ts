@@ -1,6 +1,9 @@
 import { OrchestrationResponse } from "../../types/orchestration.types";
 import { pgPool, pgQuery } from "../../config/pg";
 import { assertJsonEquivalent } from "../data/data-integrity.service";
+import { createLogger } from "../observability/logger";
+
+const logger = createLogger("orchestration.trace");
 
 interface OrchestrationRunMetadata {
   caseId?: string;
@@ -74,7 +77,7 @@ export const saveOrchestrationRun = async (
     try {
       await client.query("ROLLBACK");
     } catch (rollbackError) {
-      console.warn("Orchestration run rollback failed; connection may already be closed:", rollbackError);
+      logger.warn("Orchestration run rollback failed; connection may already be closed", { error: rollbackError });
     }
     throw error;
   } finally {

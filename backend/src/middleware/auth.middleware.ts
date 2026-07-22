@@ -2,6 +2,9 @@ import { Request, Response, NextFunction } from "express";
 import { verifyAccessToken, UserRole } from "../config/auth";
 import { AuthorizationAction, AuthorizationContext, roleCan } from "../config/authorization";
 import { loadAuthorizationContext } from "../services/auth/authorization.service";
+import { createLogger } from "../services/observability/logger";
+
+const logger = createLogger("middleware.auth");
 
 export interface AuthenticatedRequest extends Request {
   user?: AuthorizationContext;
@@ -36,7 +39,7 @@ export const requireAuth = (...allowedRoles: UserRole[]) => {
       req.user = context;
       return next();
     } catch (error) {
-      console.error("Authorization lookup failed:", error);
+      logger.error("Authorization lookup failed", { error });
       return res.status(503).json({ error: "AUTHORIZATION_SERVICE_UNAVAILABLE" });
     }
   };

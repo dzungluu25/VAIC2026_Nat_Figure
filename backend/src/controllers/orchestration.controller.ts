@@ -8,6 +8,9 @@ import { AGENT_CONTRACTS } from "../services/orchestration/agent-role-registry";
 import { OrchestrationInputError } from "../services/orchestration/input-router.service";
 import { toPublicOrchestrationError } from "../services/orchestration/orchestration-error.service";
 import { regulatoryBaseline } from "../config/policy";
+import { createLogger } from "../services/observability/logger";
+
+const logger = createLogger("controller.orchestration");
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -52,7 +55,7 @@ export const orchestratePrompt = async (req: AuthenticatedRequest, res: Response
     if (error instanceof OrchestrationInputError) {
       return res.status(422).json({ error: error.message, code: error.code, questions: error.questions });
     }
-    console.error("Orchestration error:", error);
+    logger.error("Orchestration failed", { error });
     const publicError = toPublicOrchestrationError(error);
     return res.status(publicError.httpStatus).json({ error: publicError.message, code: publicError.code });
   }
@@ -90,7 +93,7 @@ export const orchestratePromptStream = async (req: AuthenticatedRequest, res: Re
     if (error instanceof OrchestrationInputError) {
       writeEvent({ type: "error", message: error.message, code: error.code, questions: error.questions });
     } else {
-      console.error("Orchestration stream error:", error);
+      logger.error("Orchestration stream failed", { error });
       const publicError = toPublicOrchestrationError(error);
       writeEvent({ type: "error", message: publicError.message, code: publicError.code });
     }
@@ -129,7 +132,7 @@ export const extractDraftCase = async (req: AuthenticatedRequest, res: Response)
     const result = await extractDraftCaseFromPrompt(prompt.trim());
     return res.status(200).json(result);
   } catch (error) {
-    console.error("Draft extraction handler error:", error);
+    logger.error("Draft extraction handler failed", { error });
     return res.status(500).json({ error: "Internal server error performing draft extraction" });
   }
 };

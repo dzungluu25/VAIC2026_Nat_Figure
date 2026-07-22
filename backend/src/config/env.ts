@@ -34,4 +34,5 @@ export const config = {
   supabaseStorageBucket: process.env.SUPABASE_STORAGE_BUCKET || "loan-documents",
   documentStorageDriver: (process.env.DOCUMENT_STORAGE_DRIVER || "").toLowerCase(),
   localDocumentStorageDir: process.env.LOCAL_DOCUMENT_STORAGE_DIR || path.resolve(process.cwd(), "uploads"),
+  creditRiskModelUrl: process.env.CREDIT_RISK_MODEL_URL || "http://credit-risk-model:8000",
 };

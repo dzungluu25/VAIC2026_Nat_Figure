@@ -1,4 +1,4 @@
-import { executeOrchestration } from "./services/orchestration/planner.service";
+import { executeOrchestration } from "@/services/orchestration/planner.service";
 
 const prompt = `Anh Nguyễn Quốc Khánh 42 tuổi, đã kết hôn với chị Mai Phương Thảo. Anh Khánh có CCCD số 001084012345, SĐT 0913999888, email khanh.nq@example.com. Anh Khánh nộp hồ sơ đề nghị vay vốn thế chấp để mua căn hộ thuộc dự án Sunrise Towers (mã dự án: SUNRISE-HN), căn hộ này có giá trị định giá là 4,5 tỷ VND (theo chứng thư định giá đi kèm của công ty định giá độc lập) và đang trong quá trình xây dựng, dự kiến bàn giao vào cuối năm 2027. 
 

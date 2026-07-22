@@ -4,6 +4,9 @@ import { RetailCase } from "../../types/case.types";
 import { extractCaseFromPrompt } from "./case-extraction.service";
 import { loadRetailCase, saveRetailCase } from "../data/retail-case-loader";
 import { assertPersistedRetailCase } from "../data/data-integrity.service";
+import { createLogger } from "../observability/logger";
+
+const logger = createLogger("orchestration.input-router");
 
 export type InputErrorCode = "INVALID_INPUT" | "UNSUPPORTED_CASE" | "AMBIGUOUS_CASE" | "NEEDS_MORE_INFO" | "DATA_SOURCE_UNAVAILABLE";
 
@@ -122,7 +125,7 @@ const persistRetailCase = async (
         message: `Dữ liệu hồ sơ không hợp lệ. Vui lòng kiểm tra các trường bắt buộc và kiểu dữ liệu: ${cleanValidationError(error)}`,
       };
     }
-    console.error(`Failed to persist retail case ${retailCase.caseId}:`, error);
+    logger.error("Failed to persist retail case", { caseId: retailCase.caseId, error });
     return {
       ok: false,
       code: "DATA_SOURCE_UNAVAILABLE",

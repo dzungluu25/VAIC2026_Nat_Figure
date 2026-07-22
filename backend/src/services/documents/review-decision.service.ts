@@ -7,6 +7,9 @@ import { getScopedDossier, transitionDossierStatus } from "./dossier.service";
 import { recordAuditEvent } from "../governance/audit-log.service";
 import { createNotification } from "../notifications/notification.service";
 import { DossierReviewDecisionRecord, DossierStatus, LoanDossier, ReviewDecision } from "../../types/document-intake.types";
+import { createLogger } from "../observability/logger";
+
+const logger = createLogger("documents.review-decision");
 
 const NEXT_STATUS: Record<ReviewDecision, DossierStatus> = {
   approved: "APPROVED",
@@ -59,7 +62,7 @@ const notifyCustomerOfDecision = async (
       text: `Kính gửi Quý khách,\n\n${body}\n\nTrân trọng,\n${config.gmailSenderName}`,
     });
   } catch (error) {
-    console.error("Review-decision email failed (non-fatal):", error instanceof Error ? error.message : error);
+    logger.error("Review-decision email failed (non-fatal)", { error });
   }
 };
 

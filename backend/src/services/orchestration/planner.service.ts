@@ -20,6 +20,9 @@ import { getLatestApproval, ensurePendingApproval } from "../platform/approval.s
 import { getTenantConfigVersion } from "../platform/tenant-config.service";
 import { pgQuery } from "../../config/pg";
 import { createAiCompletion } from "../../config/ai-model-router";
+import { createLogger } from "../observability/logger";
+
+const logger = createLogger("orchestration.planner");
 
 // Order matters: within the self-correction chunk, selfCorrectionTrace, productTrace and
 // legalTrace all change simultaneously (one graph step) — scanning selfCorrection before
@@ -69,12 +72,12 @@ const doubleCheckAnswerWithLlm = async (finalAnswer: string, originalPrompt: str
     });
     const checked = response.choices[0].message.content?.trim();
     if (checked) {
-      console.log(`[DoubleCheck LLM] Original: "${finalAnswer}" -> Checked: "${checked}"`);
+      logger.debug("Double-check LLM rewrote the final answer", { original: finalAnswer, checked });
       return checked;
     }
     return finalAnswer;
   } catch (error) {
-    console.error("Double-check LLM call failed, falling back to original answer:", error);
+    logger.error("Double-check LLM call failed, falling back to original answer", { error });
     return finalAnswer;
   }
 };

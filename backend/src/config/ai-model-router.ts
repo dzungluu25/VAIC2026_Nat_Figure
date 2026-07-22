@@ -4,6 +4,9 @@ import type {
 } from "openai/resources/chat/completions";
 import { config } from "./env";
 import { getFptMarketplaceClient } from "./fpt-marketplace";
+import { createLogger } from "../services/observability/logger";
+
+const logger = createLogger("config.ai-model-router");
 
 export type AiTask =
   | "intent"
@@ -129,10 +132,12 @@ export const createAiCompletion = async (
     return await runCompletionWithTimeout(task, profile.primaryModel, request, profile.maxOutputTokens);
   } catch (primaryError) {
     if (!profile.fallbackModel || profile.fallbackModel === profile.primaryModel) throw primaryError;
-    console.warn(
-      `[AI router] ${task} model ${profile.primaryModel} failed; retrying with ${profile.fallbackModel}.`,
-      primaryError
-    );
+    logger.warn("Primary model failed; retrying with fallback", {
+      task,
+      primaryModel: profile.primaryModel,
+      fallbackModel: profile.fallbackModel,
+      error: primaryError,
+    });
     return runCompletionWithTimeout(task, profile.fallbackModel, request, profile.maxOutputTokens);
   }
 };

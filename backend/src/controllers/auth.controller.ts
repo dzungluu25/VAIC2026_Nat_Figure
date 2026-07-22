@@ -5,6 +5,9 @@ import { recordAuditEvent } from "../services/governance/audit-log.service";
 import { config } from "../config/env";
 import { resolveLoginRole } from "../services/auth/authorization.service";
 import type { UserRole } from "../config/authorization";
+import { createLogger } from "../services/observability/logger";
+
+const logger = createLogger("controller.auth");
 
 const AUTH_RUN_ID = "auth-session";
 const TENANT_ID = "bank-default";
@@ -52,7 +55,7 @@ export const login = async (req: Request, res: Response) => {
     await auditAuthEvent(user.username, { role }, `Login succeeded: ${user.username} (${role}).`);
     return issueSessionResponse(res, user.username, role);
   } catch (error) {
-    console.error("Login error:", error);
+    logger.error("Login failed", { error });
     return res.status(500).json({ error: "Internal server error during login" });
   }
 };
@@ -97,7 +100,7 @@ export const createDemoSession = async (_req: Request, res: Response) => {
       "Demo officer authorization profile is not ready"
     );
   } catch (error) {
-    console.error("Demo session error:", error);
+    logger.error("Demo session creation failed", { error });
     return res.status(500).json({ error: "Internal server error during demo session creation" });
   }
 };
@@ -114,7 +117,7 @@ export const createDemoApproverSession = async (_req: Request, res: Response) =>
       "Demo approver authorization profile is not ready"
     );
   } catch (error) {
-    console.error("Demo approver session error:", error);
+    logger.error("Demo approver session creation failed", { error });
     return res.status(500).json({ error: "Internal server error during demo approver session creation" });
   }
 };

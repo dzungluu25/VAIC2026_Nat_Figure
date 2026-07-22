@@ -3,6 +3,9 @@ import type { DecisionEnvelope } from "../../types/agent.types";
 import { loadRetailCase } from "../data/retail-case-loader";
 import { runLegalComplianceReasoning } from "../rag/legal-reasoning.service";
 import { groundLegalFindingsSafely } from "../governance/citation-governance.service";
+import { createLogger } from "../observability/logger";
+
+const logger = createLogger("agent.legal");
 
 const STATUS_RANK: Record<DecisionEnvelope["status"], number> = {
   PASS: 0,
@@ -62,13 +65,13 @@ export const runLegalAgent = async (
     const { grounded, quarantined } = groundLegalFindingsSafely(result.findings);
     findings = [...grounded, ...quarantined];
     if (quarantined.length) {
-      console.warn(`Legal Agent: ${quarantined.length} finding(s) quarantined for manual legal review (unmapped rules).`);
+      logger.warn("Findings quarantined for manual legal review (unmapped rules)", { quarantinedCount: quarantined.length });
     }
     toolCalls = result.toolCalls;
     reasoningMode = result.mode;
     fallbackReason = result.providerError?.message;
   } catch (err) {
-    console.error("Legal Agent: compliance reasoning failed:", err);
+    logger.error("Compliance reasoning failed", { error: err });
     return {
       id: `trace-legal-${Date.now()}`,
       runId,

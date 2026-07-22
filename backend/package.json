@@ -6,10 +6,11 @@
   "scripts": {
     "start": "node dist/server.js",
     "dev": "nodemon src/server.ts",
-    "build": "tsc",
-    "test": "ts-node src/test-core.ts && ts-node src/test-platform.ts && ts-node src/test-langgraph-integrity.ts",
-    "test:integrity": "ts-node src/test-langgraph-integrity.ts",
-    "test:authorization": "ts-node src/test-authorization.ts"
+    "build": "rm -rf dist && tsc && tsc-alias",
+    "typecheck": "tsc -p tsconfig.dev.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@langchain/core": "^1.2.3",
@@ -36,8 +37,12 @@
     "@types/node": "^20.12.7",
     "@types/nodemailer": "^8.0.1",
     "@types/pg": "^8.20.0",
+    "@vitest/coverage-v8": "^4.1.10",
     "nodemon": "^3.1.0",
     "ts-node": "^10.9.2",
-    "typescript": "^5.4.5"
+    "tsc-alias": "^1.9.1",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.4.5",
+    "vitest": "^4.1.10"
   }
 }

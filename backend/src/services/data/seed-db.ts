@@ -4,6 +4,7 @@ import { setupOrchestrationCheckpointer } from "../orchestration/orchestration-g
 import { seedLegalKnowledgeGraph } from "./knowledge-graph-seed.service";
 import { documentChecklistCatalog, checklistItemsForLoanType } from "../../config/document-checklist";
 import { USER_ROLES } from "../../config/authorization";
+import { config } from "../../config/env";
 
 const SQL_USER_ROLES = USER_ROLES.map(role => `'${role}'`).join(",");
 
@@ -103,7 +104,7 @@ export const seedDatabases = async () => {
       console.log("Skipping workflow_versions seed: bank-default/loan-pre-approval/1.2.0 already exists.");
     }
 
-    const bootstrapConfig = {tenantId:"bank-default",version:"1.0.0",thresholds:{minCreditScore:650,maxDti:0.45,maxLtvByPropertyType:{apartment:80,house:70,land:50},minimumMonthlyLivingExpenseVnd:5000000,incomeHaircuts:{salary:1,freelance:0.5,rental:0.7},maximumRepaymentAgeMargin:0,fraud:{incomeDebtRatioCeiling:15,collateralValueToLoanCeiling:6}},runtime:{maxRetriesPerAgent:2,maxSteps:100,maxTokens:50000,timeoutSeconds:90},allowedModels:[process.env.FPT_PLANNER_MODEL||"approved-default"],citationPolicy:{required:true,rejectIfMissing:true,minimumConfidence:0.8,allowedSourceTypes:["LAW","DECREE","CIRCULAR","INTERNAL_POLICY","STANDARD"]},effectiveFrom:"2026-01-01T00:00:00.000Z",updatedBy:"system"};
+    const bootstrapConfig = {tenantId:"bank-default",version:"1.0.0",thresholds:{minCreditScore:650,maxDti:0.45,maxLtvByPropertyType:{apartment:80,house:70,land:50},minimumMonthlyLivingExpenseVnd:5000000,incomeHaircuts:{salary:1,freelance:0.5,rental:0.7},maximumRepaymentAgeMargin:0,fraud:{incomeDebtRatioCeiling:15,collateralValueToLoanCeiling:6}},runtime:{maxRetriesPerAgent:2,maxSteps:100,maxTokens:50000,timeoutSeconds:90},allowedModels:[config.fptPlannerModel],citationPolicy:{required:true,rejectIfMissing:true,minimumConfidence:0.8,allowedSourceTypes:["LAW","DECREE","CIRCULAR","INTERNAL_POLICY","STANDARD"]},effectiveFrom:"2026-01-01T00:00:00.000Z",updatedBy:"system"};
     const existingConfig = await pgQuery(
       `SELECT 1 FROM tenant_runtime_configs WHERE tenant_id = $1 AND version = $2`,
       ["bank-default", "1.0.0"]

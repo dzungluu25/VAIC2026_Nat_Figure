@@ -1,4 +1,5 @@
 import fs from "fs";
+import { config } from "../../config/env";
 
 export interface MlCreditRiskResponse {
   application_id: string;
@@ -25,7 +26,7 @@ export const estimateCreditRisk = async (
   applicationId: string,
   features: Record<string, unknown>
 ): Promise<MlCreditRiskResponse> => {
-  let baseUrl = process.env.CREDIT_RISK_MODEL_URL ?? "http://credit-risk-model:8000";
+  let baseUrl = config.creditRiskModelUrl;
   if (baseUrl.includes("//credit-risk-model:") && !fs.existsSync("/.dockerenv")) {
     baseUrl = baseUrl.replace("//credit-risk-model:", "//localhost:");
   }

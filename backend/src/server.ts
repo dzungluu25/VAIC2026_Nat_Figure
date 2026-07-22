@@ -4,6 +4,9 @@ import { seedDatabases } from "./services/data/seed-db";
 import { assertAuthSecretConfigured } from "./config/auth";
 import { assertDemoUsersConfigured } from "./services/auth/demo-user.store";
 import { assertFptMarketplaceConfigured } from "./config/fpt-marketplace";
+import { createLogger } from "./services/observability/logger";
+
+const logger = createLogger("server");
 
 const startServer = async () => {
   // Fail fast on missing auth secrets/passwords rather than surfacing an obscure
@@ -17,7 +20,7 @@ const startServer = async () => {
   await seedDatabases();
 
   app.listen(config.port, () => {
-    console.log(`Backend server is running on port ${config.port} in ${config.nodeEnv} mode.`);
+    logger.info("Backend server started", { port: config.port, nodeEnv: config.nodeEnv });
   });
 };
 

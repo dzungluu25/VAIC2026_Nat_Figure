@@ -3,6 +3,9 @@ import { AuditEvent } from "../../types/trace.types";
 import { pgPool } from "../../config/pg";
 import { detectPromptInjection } from "./input-security.service";
 import { maskPiiText } from "./pii-masking.service";
+import { createLogger } from "../observability/logger";
+
+const logger = createLogger("governance.audit-log");
 
 // Genesis hash for an empty chain — every subsequent event links to its predecessor's hash.
 const GENESIS_HASH = "0".repeat(64);
@@ -123,14 +126,14 @@ export const recordAuditEvent = async (
       try {
         await client.query("ROLLBACK");
       } catch (rollbackErr) {
-        console.warn("Audit Log: Rollback failed, connection likely closed:", rollbackErr);
+        logger.warn("Rollback failed, connection likely closed", { error: rollbackErr });
       }
       throw err;
     } finally {
       client.release();
     }
   } catch (dbErr) {
-    console.error("Failed to write a verified audit event to database:", dbErr);
+    logger.error("Failed to write a verified audit event to database", { error: dbErr });
     throw dbErr;
   }
 

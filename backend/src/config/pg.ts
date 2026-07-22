@@ -1,6 +1,9 @@
 import "./load-env";
 import fs from "fs";
 import { Pool } from "pg";
+import { createLogger } from "../services/observability/logger";
+
+const logger = createLogger("config.pg");
 
 const isProduction = (process.env.NODE_ENV || "development") === "production";
 
@@ -35,8 +38,8 @@ const buildSupabaseSsl = () => {
     );
   }
 
-  console.warn(
-    "[pg] Supabase TLS certificate is NOT verified (rejectUnauthorized=false). " +
+  logger.warn(
+    "Supabase TLS certificate is NOT verified (rejectUnauthorized=false). " +
       "Set SUPABASE_CA_CERT to enable a verified connection before running in production."
   );
   return { rejectUnauthorized: false as const };
@@ -78,12 +81,12 @@ export const pgPool = new Pool(buildPgPoolConfig());
 
 pgPool.on("connect", (client) => {
   client.on("error", (err: Error) => {
-    console.error("Unexpected error on active PostgreSQL client:", err);
+    logger.error("Unexpected error on active PostgreSQL client", { error: err });
   });
 });
 
 pgPool.on("error", (err: Error) => {
-  console.error("Unexpected error on idle PostgreSQL client:", err);
+  logger.error("Unexpected error on idle PostgreSQL client", { error: err });
 });
 
 export const pgQuery = async (text: string, params?: any[]) => {
