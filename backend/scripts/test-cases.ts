@@ -1,5 +1,5 @@
-import { executeOrchestration } from "./services/orchestration/planner.service";
-import { OrchestrationInputError } from "./services/orchestration/input-router.service";
+import { executeOrchestration } from "@/services/orchestration/planner.service";
+import { OrchestrationInputError } from "@/services/orchestration/input-router.service";
 
 interface TestCase {
   name: string;

@@ -1,4 +1,4 @@
-import { pgQuery } from "./config/pg";
+import { pgQuery } from "@/config/pg";
 
 async function main() {
   try {

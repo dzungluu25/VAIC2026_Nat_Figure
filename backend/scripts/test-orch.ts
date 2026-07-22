@@ -1,4 +1,4 @@
-import { executeOrchestration } from "./services/orchestration/planner.service";
+import { executeOrchestration } from "@/services/orchestration/planner.service";
 
 async function main() {
   try {

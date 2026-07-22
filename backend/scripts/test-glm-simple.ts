@@ -1,5 +1,5 @@
-import { getFptMarketplaceClient } from "./config/fpt-marketplace";
-import { config } from "./config/env";
+import { getFptMarketplaceClient } from "@/config/fpt-marketplace";
+import { config } from "@/config/env";
 
 async function main() {
   try {

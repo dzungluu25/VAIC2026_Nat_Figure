@@ -4,6 +4,10 @@
     "module": "commonjs",
     "rootDir": "./src",
     "outDir": "./dist",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    },
     "esModuleInterop": true,
     "strict": true,
     "skipLibCheck": true,
@@ -11,5 +15,10 @@
     "moduleResolution": "node",
     "resolveJsonModule": true
   },
-  "include": ["src/**/*"]
+  // Build input is production source only. Tests and operator scripts are
+  // type-checked via tsconfig.dev.json and never emitted into dist/.
+  "include": ["src/**/*"],
+  "ts-node": {
+    "require": ["tsconfig-paths/register"]
+  }
 }
